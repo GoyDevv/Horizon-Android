@@ -45,6 +45,9 @@ android {
             debuggable false
             jniDebuggable false
             minifyEnabled false
+            zipAlignEnabled true
+            v2SigningEnabled true
+            v3SigningEnabled true
             // The permanent key lets one APK update the previous install in place
             // (Android needs the same certificate and a higher versionCode).
             // Only the public certificate enters the APK; the key never does.
