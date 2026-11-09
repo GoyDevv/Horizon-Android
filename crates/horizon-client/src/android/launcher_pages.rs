@@ -5348,6 +5348,7 @@ impl Launcher {
                         self.list_targets
                             .push((r, Action::SetThemeAppearance(mode)));
                     }
+                    let third = (half - 12.0) / 3.0;
                     for (i, (lbl, bmode, active)) in [
                         (
                             "Solid BG",
@@ -5359,14 +5360,19 @@ impl Launcher {
                             BackgroundMode::Gradient,
                             theme_cfg.background_mode == BackgroundMode::Gradient,
                         ),
+                        (
+                            "Horizon BG",
+                            BackgroundMode::Horizon,
+                            theme_cfg.background_mode == BackgroundMode::Horizon,
+                        ),
                     ]
                     .into_iter()
                     .enumerate()
                     {
                         let r = [
-                            content_x + half + 10.0 + i as f32 * (quarter + 6.0),
+                            content_x + half + 10.0 + i as f32 * (third + 6.0),
                             cy,
-                            quarter,
+                            third,
                             38.0,
                         ];
                         button(

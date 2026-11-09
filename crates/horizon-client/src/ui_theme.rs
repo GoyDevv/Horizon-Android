@@ -150,6 +150,7 @@ pub enum Icon {
     FileText,
     Trash,
     Share,
+    Skins,
 }
 
 struct Fonts {
@@ -198,6 +199,7 @@ struct Cache {
     entries: HashMap<Key, Cached>,
     images: HashMap<String, Rect>,
     shelf: (u32, u32, u32),
+    image_shelf: (u32, u32, u32),
     pending: Vec<crate::font::Patch>,
     glyph_scratch: Vec<(f32, f32, Rect)>,
     /// The atlas the entries were uploaded to (a new atlas starts over).
@@ -219,6 +221,7 @@ fn with_cache<R>(atlas: &HudAtlas, f: impl FnOnce(&mut Cache) -> R) -> R {
             entries: HashMap::with_capacity(512),
             images: HashMap::with_capacity(64),
             shelf: (0, 0, 0),
+            image_shelf: (0, 320, 0),
             pending: Vec::with_capacity(64),
             glyph_scratch: Vec::with_capacity(128),
             atlas: id,
@@ -228,6 +231,7 @@ fn with_cache<R>(atlas: &HudAtlas, f: impl FnOnce(&mut Cache) -> R) -> R {
             cache.entries.clear();
             cache.images.clear();
             cache.shelf = (0, 0, 0);
+            cache.image_shelf = (0, 320, 0);
             cache.pending.clear();
         }
         f(cache)
@@ -246,13 +250,195 @@ fn seg_dist(px: f32, py: f32, ax: f32, ay: f32, bx: f32, by: f32) -> f32 {
     ((px - (ax + t * dx)).powi(2) + (py - (ay + t * dy)).powi(2)).sqrt()
 }
 
+/// The colour Horizon sunset logo as a 96x96 pixel grid, run-length encoded.
+/// Palette entries are `0xRRGGBB`; transparent cells (the rounded corners) are absent.
+const HORIZON_LOGO_GRID: u32 = 96;
+static HORIZON_LOGO_PALETTE: [u32; 18] = [0xFFE6A5, 0xDA9A72, 0x573474, 0x402D6F, 0x3F2972, 0x2F2465, 0x222054, 0x1D1C4E, 0x1B1951, 0x171748, 0x141543, 0x12163A, 0x101439, 0x101337, 0x0E1234, 0x0D102F, 0x0B0E29, 0x03040B];
+/// `(first_row, row_count, first_col, col_count, palette_index)`.
+static HORIZON_LOGO_RUNS: [(u8, u8, u8, u8, u8); 998] = [
+    (0,1,16,2,7), (0,1,18,60,11), (0,1,78,2,7), (1,1,13,1,6), (1,1,14,1,7), (1,1,15,1,11),
+    (1,1,16,1,14), (1,1,17,62,15), (1,1,79,1,14), (1,1,80,1,11), (1,1,81,1,7), (1,1,82,1,6),
+    (2,1,11,1,7), (2,1,12,1,11), (2,1,13,1,13), (2,1,14,68,15), (2,1,82,1,13), (2,1,83,1,11),
+    (2,1,84,1,7), (3,1,9,1,7), (3,1,10,1,10), (3,1,11,1,13), (3,1,12,73,14), (3,1,85,1,10),
+    (3,1,86,1,7), (4,1,8,1,6), (4,1,9,1,11), (4,1,10,76,14), (4,1,86,1,11), (4,1,87,1,6),
+    (5,1,7,1,7), (5,1,8,1,11), (5,1,9,1,14), (5,1,10,1,13), (5,1,11,2,14), (5,1,13,1,13),
+    (5,1,14,2,14), (5,1,16,1,13), (5,1,17,2,14), (5,1,19,1,13), (5,1,20,2,14), (5,1,22,1,13),
+    (5,1,23,2,14), (5,1,25,1,13), (5,1,26,2,14), (5,1,28,1,13), (5,1,29,2,14), (5,1,31,1,13),
+    (5,1,32,2,14), (5,1,34,1,13), (5,1,35,2,14), (5,1,37,1,13), (5,1,38,2,14), (5,1,40,1,13),
+    (5,1,41,2,14), (5,1,43,1,13), (5,1,44,2,14), (5,1,46,1,13), (5,1,47,2,14), (5,1,49,1,13),
+    (5,1,50,2,14), (5,1,52,1,13), (5,1,53,2,14), (5,1,55,1,13), (5,1,56,2,14), (5,1,58,1,13),
+    (5,1,59,2,14), (5,1,61,1,13), (5,1,62,2,14), (5,1,64,1,13), (5,1,65,2,14), (5,1,67,1,13),
+    (5,1,68,2,14), (5,1,70,1,13), (5,1,71,2,14), (5,1,73,1,13), (5,1,74,2,14), (5,1,76,1,13),
+    (5,1,77,2,14), (5,1,79,1,13), (5,1,80,2,14), (5,1,82,1,13), (5,1,83,2,14), (5,1,85,1,13),
+    (5,1,86,1,14), (5,1,87,1,11), (5,1,88,1,7), (6,1,6,1,7), (6,1,7,82,13), (6,1,89,1,7),
+    (7,1,5,1,6), (7,1,6,84,12), (7,1,90,1,6), (8,1,4,1,6), (8,1,5,1,10), (8,1,6,84,12),
+    (8,1,90,1,10), (8,1,91,1,6), (9,1,3,1,6), (9,1,4,1,10), (9,1,5,1,11), (9,1,6,1,12),
+    (9,1,7,2,11), (9,1,9,1,12), (9,1,10,2,11), (9,1,12,1,12), (9,1,13,2,11), (9,1,15,1,12),
+    (9,1,16,2,11), (9,1,18,1,12), (9,1,19,2,11), (9,1,21,1,12), (9,1,22,2,11), (9,1,24,1,12),
+    (9,1,25,2,11), (9,1,27,1,12), (9,1,28,2,11), (9,1,30,1,12), (9,1,31,2,11), (9,1,33,1,12),
+    (9,1,34,2,11), (9,1,36,1,12), (9,1,37,2,11), (9,1,39,1,12), (9,1,40,2,11), (9,1,42,1,12),
+    (9,1,43,2,11), (9,1,45,1,12), (9,1,46,2,11), (9,1,48,1,12), (9,1,49,2,11), (9,1,51,1,12),
+    (9,1,52,2,11), (9,1,54,1,12), (9,1,55,2,11), (9,1,57,1,12), (9,1,58,2,11), (9,1,60,1,12),
+    (9,1,61,2,11), (9,1,63,1,12), (9,1,64,2,11), (9,1,66,1,12), (9,1,67,2,11), (9,1,69,1,12),
+    (9,1,70,2,11), (9,1,72,1,12), (9,1,73,2,11), (9,1,75,1,12), (9,1,76,2,11), (9,1,78,1,12),
+    (9,1,79,2,11), (9,1,81,1,12), (9,1,82,2,11), (9,1,84,1,12), (9,1,85,2,11), (9,1,87,1,12),
+    (9,1,88,2,11), (9,1,90,1,12), (9,1,91,1,10), (9,1,92,1,6), (10,1,3,1,7), (10,1,4,1,10),
+    (10,1,5,2,11), (10,1,7,1,10), (10,1,8,2,11), (10,1,10,1,10), (10,1,11,2,11), (10,1,13,1,10),
+    (10,1,14,2,11), (10,1,16,1,10), (10,1,17,2,11), (10,1,19,1,10), (10,1,20,2,11), (10,1,22,1,10),
+    (10,1,23,2,11), (10,1,25,1,10), (10,1,26,2,11), (10,1,28,1,10), (10,1,29,2,11), (10,1,31,1,10),
+    (10,1,32,2,11), (10,1,34,1,10), (10,1,35,2,11), (10,1,37,1,10), (10,1,38,2,11), (10,1,40,1,10),
+    (10,1,41,2,11), (10,1,43,1,10), (10,1,44,2,11), (10,1,46,1,10), (10,1,47,2,11), (10,1,49,1,10),
+    (10,1,50,2,11), (10,1,52,1,10), (10,1,53,2,11), (10,1,55,1,10), (10,1,56,2,11), (10,1,58,1,10),
+    (10,1,59,2,11), (10,1,61,1,10), (10,1,62,2,11), (10,1,64,1,10), (10,1,65,2,11), (10,1,67,1,10),
+    (10,1,68,2,11), (10,1,70,1,10), (10,1,71,2,11), (10,1,73,1,10), (10,1,74,2,11), (10,1,76,1,10),
+    (10,1,77,2,11), (10,1,79,1,10), (10,1,80,2,11), (10,1,82,1,10), (10,1,83,2,11), (10,1,85,1,10),
+    (10,1,86,2,11), (10,1,88,1,10), (10,1,89,2,11), (10,1,91,1,10), (10,1,92,1,7), (11,1,2,1,6),
+    (11,1,3,90,10), (11,1,93,1,6), (12,1,2,1,7), (12,1,3,90,10), (12,1,93,1,7), (13,1,1,1,5),
+    (13,1,2,1,9), (13,1,3,90,10), (13,1,93,1,9), (13,1,94,1,5), (14,1,1,1,6), (14,1,2,92,10),
+    (14,1,94,1,6), (15,1,1,1,7), (15,1,2,92,9), (15,1,94,1,6), (16,1,0,1,5), (16,1,1,1,7),
+    (16,1,2,92,9), (16,1,94,1,7), (16,1,95,1,5), (17,1,0,1,5), (17,1,1,94,9), (17,1,95,1,5),
+    (18,1,0,1,6), (18,1,1,94,9), (18,1,95,1,6), (19,2,0,1,6), (19,2,1,94,8), (19,2,95,1,6),
+    (21,2,0,1,5), (21,2,1,94,8), (21,2,95,1,5), (23,1,0,1,5), (23,1,1,39,8), (23,1,40,2,6),
+    (23,1,42,1,8), (23,1,43,2,6), (23,1,45,1,8), (23,1,46,2,6), (23,1,48,1,8), (23,1,49,2,6),
+    (23,1,51,1,8), (23,1,52,2,6), (23,1,54,1,8), (23,1,55,1,6), (23,1,56,39,8), (23,1,95,1,5),
+    (24,1,0,1,5), (24,1,1,27,8), (24,1,28,2,6), (24,1,30,1,8), (24,1,31,35,6), (24,1,66,1,8),
+    (24,1,67,1,6), (24,1,68,27,8), (24,1,95,1,5), (25,1,0,1,5), (25,1,1,2,6), (25,1,3,1,8),
+    (25,1,4,2,6), (25,1,6,1,8), (25,1,7,2,6), (25,1,9,1,8), (25,1,10,2,6), (25,1,12,1,8),
+    (25,1,13,2,6), (25,1,15,1,8), (25,1,16,2,6), (25,1,18,1,8), (25,1,19,2,6), (25,1,21,1,8),
+    (25,1,22,2,6), (25,1,24,1,8), (25,1,25,47,6), (25,1,72,1,8), (25,1,73,2,6), (25,1,75,1,8),
+    (25,1,76,2,6), (25,1,78,1,8), (25,1,79,2,6), (25,1,81,1,8), (25,1,82,2,6), (25,1,84,1,8),
+    (25,1,85,2,6), (25,1,87,1,8), (25,1,88,2,6), (25,1,90,1,8), (25,1,91,2,6), (25,1,93,1,8),
+    (25,1,94,1,6), (25,1,95,1,5), (26,2,0,1,5), (26,2,1,94,6), (26,2,95,1,5), (28,1,0,1,5),
+    (28,1,1,33,6), (28,1,34,2,5), (28,1,36,1,6), (28,1,37,20,5), (28,1,57,1,6), (28,1,58,2,5),
+    (28,1,60,1,6), (28,1,61,1,5), (28,1,62,33,6), (28,1,95,1,5), (29,1,0,1,5), (29,1,1,25,6),
+    (29,1,26,43,5), (29,1,69,26,6), (29,1,95,1,5), (30,1,0,1,5), (30,1,1,15,6), (30,1,16,28,5),
+    (30,1,44,1,3), (30,1,45,6,2), (30,1,51,1,3), (30,1,52,28,5), (30,1,80,15,6), (30,1,95,1,5),
+    (31,1,0,3,5), (31,1,3,1,6), (31,1,4,2,5), (31,1,6,1,6), (31,1,7,2,5), (31,1,9,1,6),
+    (31,1,10,30,5), (31,1,40,1,3), (31,1,41,1,2), (31,1,42,12,0), (31,1,54,1,2), (31,1,55,1,3),
+    (31,1,56,28,5), (31,1,84,1,6), (31,1,85,2,5), (31,1,87,1,6), (31,1,88,2,5), (31,1,90,1,6),
+    (31,1,91,2,5), (31,1,93,1,6), (31,1,94,2,5), (32,1,0,38,5), (32,1,38,1,2), (32,1,39,1,1),
+    (32,1,40,16,0), (32,1,56,1,1), (32,1,57,1,2), (32,1,58,38,5), (33,1,0,1,3), (33,1,1,34,5),
+    (33,1,35,1,3), (33,1,36,1,1), (33,1,37,22,0), (33,1,59,1,1), (33,1,60,1,3), (33,1,61,34,5),
+    (33,1,95,1,3), (34,1,0,1,4), (34,1,1,33,5), (34,1,34,1,2), (34,1,35,26,0), (34,1,61,1,2),
+    (34,1,62,33,5), (34,1,95,1,4), (35,1,0,1,4), (35,1,1,31,5), (35,1,32,1,3), (35,1,33,1,1),
+    (35,1,34,28,0), (35,1,62,1,1), (35,1,63,1,3), (35,1,64,31,5), (35,1,95,1,4), (36,1,0,1,4),
+    (36,1,1,30,5), (36,1,31,1,2), (36,1,32,32,0), (36,1,64,1,2), (36,1,65,1,3), (36,1,66,29,5),
+    (36,1,95,1,4), (37,1,0,1,4), (37,1,1,18,5), (37,1,19,3,4), (37,1,22,8,3), (37,1,30,1,2),
+    (37,1,31,34,0), (37,1,65,1,2), (37,1,66,9,3), (37,1,75,20,5), (37,1,95,1,4), (38,1,0,1,3),
+    (38,1,1,12,5), (38,1,13,5,4), (38,1,18,11,3), (38,1,29,1,2), (38,1,30,36,0), (38,1,66,1,2),
+    (38,1,67,11,3), (38,1,78,6,4), (38,1,84,11,5), (38,1,95,1,3), (39,1,0,1,3), (39,1,1,3,5),
+    (39,1,4,11,4), (39,1,15,13,3), (39,1,28,1,2), (39,1,29,38,0), (39,1,67,1,2), (39,1,68,12,3),
+    (39,1,80,12,4), (39,1,92,3,5), (39,1,95,1,3), (40,1,0,1,3), (40,1,1,11,4), (40,1,12,15,3),
+    (40,1,27,1,2), (40,1,28,40,0), (40,1,68,1,2), (40,1,69,15,3), (40,1,84,11,4), (40,1,95,1,3),
+    (41,1,0,1,3), (41,1,1,8,4), (41,1,9,17,3), (41,1,26,1,2), (41,1,27,1,1), (41,1,28,40,0),
+    (41,1,68,1,1), (41,1,69,1,2), (41,1,70,16,3), (41,1,86,9,4), (41,1,95,1,2), (42,1,0,1,2),
+    (42,1,1,4,4), (42,1,5,13,3), (42,1,18,8,2), (42,1,26,1,1), (42,1,27,42,0), (42,1,69,1,1),
+    (42,1,70,8,2), (42,1,78,13,3), (42,1,91,4,4), (42,1,95,1,2), (43,1,0,1,2), (43,1,1,2,4),
+    (43,1,3,8,3), (43,1,11,15,2), (43,1,26,44,0), (43,1,70,14,2), (43,1,84,9,3), (43,1,93,2,4),
+    (43,1,95,1,2), (44,1,0,1,2), (44,1,1,5,3), (44,1,6,19,2), (44,1,25,1,1), (44,1,26,44,0),
+    (44,1,70,1,1), (44,1,71,19,2), (44,1,90,5,3), (44,1,95,1,2), (45,1,0,25,2), (45,1,25,46,0),
+    (45,1,71,25,2), (46,1,0,24,2), (46,1,24,1,1), (46,1,25,46,0), (46,1,71,1,1), (46,1,72,24,2),
+    (47,2,0,24,2), (47,2,24,48,0), (47,2,72,24,2), (49,2,0,23,2), (49,2,23,50,1), (49,2,73,5,2),
+    (49,2,78,17,4), (49,2,95,1,2), (51,2,0,23,2), (51,2,23,50,0), (51,2,73,5,2), (51,2,78,17,4),
+    (51,2,95,1,2), (53,1,0,22,2), (53,1,22,52,1), (53,1,74,4,2), (53,1,78,17,4), (53,1,95,1,2),
+    (54,2,0,12,2), (54,2,12,12,4), (54,2,24,42,1), (54,2,66,29,4), (54,2,95,1,2), (56,2,0,12,2),
+    (56,2,12,12,4), (56,2,24,42,0), (56,2,66,29,4), (56,2,95,1,2), (58,2,0,12,2), (58,2,12,12,4),
+    (58,2,24,42,1), (58,2,66,29,4), (58,2,95,1,2), (60,1,0,1,2), (60,1,1,71,4), (60,1,72,13,2),
+    (60,1,85,10,4), (60,1,95,1,2), (61,3,0,1,2), (61,3,1,71,4), (61,3,72,1,7), (61,3,73,11,10),
+    (61,3,84,1,2), (61,3,85,10,4), (61,3,95,1,2), (64,2,0,1,2), (64,2,1,71,4), (64,2,72,1,7),
+    (64,2,73,11,10), (64,2,84,1,3), (64,2,85,10,4), (64,2,95,1,2), (66,1,0,1,2), (66,1,1,11,4),
+    (66,1,12,1,2), (66,1,13,24,3), (66,1,37,23,4), (66,1,60,1,2), (66,1,61,11,3), (66,1,72,1,7),
+    (66,1,73,11,10), (66,1,84,1,2), (66,1,85,10,3), (66,1,95,1,2), (67,1,0,1,2), (67,1,1,11,4),
+    (67,1,12,1,7), (67,1,13,23,11), (67,1,36,1,3), (67,1,37,23,4), (67,1,60,1,7), (67,1,61,11,11),
+    (67,1,72,1,7), (67,1,73,11,11), (67,1,84,1,7), (67,1,85,10,11), (67,1,95,1,6), (68,3,0,1,2),
+    (68,3,1,11,4), (68,3,12,1,7), (68,3,13,23,11), (68,3,36,1,3), (68,3,37,23,4), (68,3,60,1,7),
+    (68,3,61,11,11), (68,3,72,1,7), (68,3,73,11,11), (68,3,84,1,7), (68,3,85,10,11), (68,3,95,1,7),
+    (71,1,0,1,3), (71,1,1,11,4), (71,1,12,1,9), (71,1,13,23,11), (71,1,36,1,3), (71,1,37,23,4),
+    (71,1,60,1,9), (71,1,61,11,11), (71,1,72,1,9), (71,1,73,11,11), (71,1,84,1,9), (71,1,85,10,11),
+    (71,1,95,1,7), (72,1,0,1,3), (72,1,1,11,6), (72,1,12,1,9), (72,1,13,23,12), (72,1,36,1,5),
+    (72,1,37,23,6), (72,1,60,1,9), (72,1,61,11,12), (72,1,72,1,9), (72,1,73,11,12), (72,1,84,1,9),
+    (72,1,85,10,12), (72,1,95,1,7), (73,1,0,1,7), (73,1,1,11,12), (73,1,12,1,9), (73,1,13,23,12),
+    (73,1,36,1,9), (73,1,37,23,12), (73,1,60,1,9), (73,1,61,11,12), (73,1,72,1,9), (73,1,73,11,12),
+    (73,1,84,1,9), (73,1,85,10,12), (73,1,95,1,7), (74,1,0,1,7), (74,1,1,11,13), (74,1,12,1,9),
+    (74,1,13,23,13), (74,1,36,1,9), (74,1,37,23,13), (74,1,60,1,9), (74,1,61,11,13), (74,1,72,1,9),
+    (74,1,73,11,13), (74,1,84,1,9), (74,1,85,10,13), (74,1,95,1,7), (75,1,0,1,7), (75,1,1,11,13),
+    (75,1,12,1,10), (75,1,13,23,13), (75,1,36,1,10), (75,1,37,23,13), (75,1,60,1,10), (75,1,61,11,13),
+    (75,1,72,1,10), (75,1,73,11,13), (75,1,84,1,10), (75,1,85,10,13), (75,1,95,1,7), (76,1,0,1,7),
+    (76,1,1,1,13), (76,1,2,2,14), (76,1,4,1,13), (76,1,5,2,14), (76,1,7,1,13), (76,1,8,2,14),
+    (76,1,10,1,13), (76,1,11,1,14), (76,1,12,1,10), (76,1,13,1,13), (76,1,14,2,14), (76,1,16,1,13),
+    (76,1,17,2,14), (76,1,19,1,13), (76,1,20,2,14), (76,1,22,1,13), (76,1,23,2,14), (76,1,25,1,13),
+    (76,1,26,2,14), (76,1,28,1,13), (76,1,29,2,14), (76,1,31,1,13), (76,1,32,2,14), (76,1,34,1,13),
+    (76,1,35,1,14), (76,1,36,1,10), (76,1,37,1,13), (76,1,38,2,14), (76,1,40,1,13), (76,1,41,2,14),
+    (76,1,43,1,13), (76,1,44,2,14), (76,1,46,1,13), (76,1,47,2,14), (76,1,49,1,13), (76,1,50,2,14),
+    (76,1,52,1,13), (76,1,53,2,14), (76,1,55,1,13), (76,1,56,2,14), (76,1,58,1,13), (76,1,59,1,14),
+    (76,1,60,1,10), (76,1,61,1,13), (76,1,62,2,14), (76,1,64,1,13), (76,1,65,2,14), (76,1,67,1,13),
+    (76,1,68,2,14), (76,1,70,1,13), (76,1,71,1,14), (76,1,72,1,10), (76,1,73,1,13), (76,1,74,2,14),
+    (76,1,76,1,13), (76,1,77,2,14), (76,1,79,1,13), (76,1,80,2,14), (76,1,82,1,13), (76,1,83,1,14),
+    (76,1,84,1,10), (76,1,85,1,13), (76,1,86,2,14), (76,1,88,1,13), (76,1,89,2,14), (76,1,91,1,13),
+    (76,1,92,2,14), (76,1,94,1,13), (76,1,95,1,7), (77,2,0,1,6), (77,2,1,11,14), (77,2,12,1,11),
+    (77,2,13,23,14), (77,2,36,1,11), (77,2,37,23,14), (77,2,60,1,11), (77,2,61,11,14), (77,2,72,1,11),
+    (77,2,73,11,14), (77,2,84,1,11), (77,2,85,10,14), (77,2,95,1,6), (79,1,0,1,6), (79,1,1,1,13),
+    (79,1,2,10,14), (79,1,12,1,11), (79,1,13,23,14), (79,1,36,1,11), (79,1,37,23,14), (79,1,60,1,11),
+    (79,1,61,11,14), (79,1,72,1,11), (79,1,73,11,14), (79,1,84,1,11), (79,1,85,9,14), (79,1,94,1,13),
+    (79,1,95,1,6), (80,1,1,1,11), (80,1,2,1,14), (80,1,3,1,15), (80,1,4,2,14), (80,1,6,1,15),
+    (80,1,7,2,14), (80,1,9,1,15), (80,1,10,2,14), (80,1,12,1,11), (80,1,13,2,14), (80,1,15,1,15),
+    (80,1,16,2,14), (80,1,18,1,15), (80,1,19,2,14), (80,1,21,1,15), (80,1,22,2,14), (80,1,24,1,15),
+    (80,1,25,2,14), (80,1,27,1,15), (80,1,28,2,14), (80,1,30,1,15), (80,1,31,2,14), (80,1,33,1,15),
+    (80,1,34,2,14), (80,1,36,1,11), (80,1,37,2,14), (80,1,39,1,15), (80,1,40,2,14), (80,1,42,1,15),
+    (80,1,43,2,14), (80,1,45,1,15), (80,1,46,2,14), (80,1,48,1,15), (80,1,49,2,14), (80,1,51,1,15),
+    (80,1,52,2,14), (80,1,54,1,15), (80,1,55,2,14), (80,1,57,1,15), (80,1,58,2,14), (80,1,60,1,11),
+    (80,1,61,2,14), (80,1,63,1,15), (80,1,64,2,14), (80,1,66,1,15), (80,1,67,2,14), (80,1,69,1,15),
+    (80,1,70,2,14), (80,1,72,1,11), (80,1,73,2,14), (80,1,75,1,15), (80,1,76,2,14), (80,1,78,1,15),
+    (80,1,79,2,14), (80,1,81,1,15), (80,1,82,2,14), (80,1,84,1,11), (80,1,85,2,14), (80,1,87,1,15),
+    (80,1,88,2,14), (80,1,90,1,15), (80,1,91,2,14), (80,1,93,1,15), (80,1,94,1,11), (81,1,1,1,7),
+    (81,1,2,10,15), (81,1,12,1,11), (81,1,13,23,15), (81,1,36,1,11), (81,1,37,23,15), (81,1,60,1,11),
+    (81,1,61,11,15), (81,1,72,1,11), (81,1,73,11,15), (81,1,84,1,11), (81,1,85,9,15), (81,1,94,1,7),
+    (82,1,1,1,6), (82,1,2,1,13), (82,1,3,9,15), (82,1,12,1,11), (82,1,13,23,15), (82,1,36,1,11),
+    (82,1,37,23,15), (82,1,60,1,11), (82,1,61,11,15), (82,1,72,1,11), (82,1,73,11,15), (82,1,84,1,11),
+    (82,1,85,8,15), (82,1,93,1,13), (82,1,94,1,6), (83,1,2,1,11), (83,1,3,9,15), (83,1,12,1,11),
+    (83,1,13,23,15), (83,1,36,1,11), (83,1,37,23,15), (83,1,60,1,11), (83,1,61,11,15), (83,1,72,1,11),
+    (83,1,73,11,15), (83,1,84,1,11), (83,1,85,8,15), (83,1,93,1,11), (84,1,2,1,5), (84,1,3,90,11),
+    (84,1,93,1,5), (85,1,3,1,11), (85,1,4,8,15), (85,1,12,1,11), (85,1,13,23,15), (85,1,36,1,11),
+    (85,1,37,23,15), (85,1,60,1,11), (85,1,61,11,15), (85,1,72,1,11), (85,1,73,11,15), (85,1,84,1,11),
+    (85,1,85,7,15), (85,1,92,1,11), (86,1,3,1,6), (86,1,4,1,14), (86,1,5,7,16), (86,1,12,1,11),
+    (86,1,13,23,16), (86,1,36,1,11), (86,1,37,23,16), (86,1,60,1,11), (86,1,61,11,16), (86,1,72,1,11),
+    (86,1,73,11,16), (86,1,84,1,11), (86,1,85,6,16), (86,1,91,1,14), (86,1,92,1,6), (87,1,4,1,7),
+    (87,1,5,1,15), (87,1,6,6,16), (87,1,12,1,11), (87,1,13,23,16), (87,1,36,1,11), (87,1,37,23,16),
+    (87,1,60,1,11), (87,1,61,11,16), (87,1,72,1,11), (87,1,73,11,16), (87,1,84,1,11), (87,1,85,5,16),
+    (87,1,90,1,15), (87,1,91,1,7), (88,1,5,1,7), (88,1,6,6,16), (88,1,12,1,11), (88,1,13,23,16),
+    (88,1,36,1,11), (88,1,37,23,16), (88,1,60,1,11), (88,1,61,11,16), (88,1,72,1,11), (88,1,73,11,16),
+    (88,1,84,1,11), (88,1,85,5,16), (88,1,90,1,7), (89,1,6,1,11), (89,1,7,5,16), (89,1,12,1,11),
+    (89,1,13,23,16), (89,1,36,1,11), (89,1,37,23,16), (89,1,60,1,11), (89,1,61,11,16), (89,1,72,1,11),
+    (89,1,73,11,16), (89,1,84,1,11), (89,1,85,4,16), (89,1,89,1,11), (90,1,7,1,7), (90,1,8,1,15),
+    (90,1,9,3,16), (90,1,12,1,13), (90,1,13,23,16), (90,1,36,1,13), (90,1,37,23,16), (90,1,60,1,13),
+    (90,1,61,11,16), (90,1,72,1,13), (90,1,73,11,16), (90,1,84,1,13), (90,1,85,2,16), (90,1,87,1,15),
+    (90,1,88,1,7), (91,1,8,1,7), (91,1,9,1,15), (91,1,10,2,16), (91,1,12,1,13), (91,1,13,23,16),
+    (91,1,36,1,13), (91,1,37,23,16), (91,1,60,1,13), (91,1,61,11,16), (91,1,72,1,13), (91,1,73,11,16),
+    (91,1,84,1,13), (91,1,85,1,16), (91,1,86,1,15), (91,1,87,1,7), (92,1,9,1,6), (92,1,10,1,11),
+    (92,1,11,1,16), (92,1,12,1,14), (92,1,13,23,16), (92,1,36,1,14), (92,1,37,23,16), (92,1,60,1,14),
+    (92,1,61,11,16), (92,1,72,1,14), (92,1,73,11,16), (92,1,84,2,11), (92,1,86,1,6), (93,1,11,1,6),
+    (93,1,12,1,11), (93,1,13,23,16), (93,1,36,1,14), (93,1,37,23,16), (93,1,60,1,14), (93,1,61,11,16),
+    (93,1,72,1,14), (93,1,73,10,16), (93,1,83,1,11), (93,1,84,1,6), (94,1,13,1,6), (94,1,14,1,11),
+    (94,1,15,1,14), (94,1,16,20,16), (94,1,36,1,14), (94,1,37,23,16), (94,1,60,1,14), (94,1,61,11,16),
+    (94,1,72,1,14), (94,1,73,7,16), (94,1,80,1,14), (94,1,81,1,11), (94,1,82,1,6), (95,1,16,2,7),
+    (95,1,18,18,11), (95,1,36,1,7), (95,1,37,23,11), (95,1,60,1,7), (95,1,61,11,11), (95,1,72,1,7),
+    (95,1,73,5,11), (95,1,78,2,7),
+];
+
 fn icon_hit(icon: Icon, u: f32, v: f32) -> bool {
     match icon {
         Icon::HorizonLogo => {
-            let left_bar = seg_dist(u, v, 0.22, 0.16, 0.22, 0.84) <= 0.095;
-            let right_bar = seg_dist(u, v, 0.78, 0.16, 0.78, 0.84) <= 0.095;
-            let bridge = seg_dist(u, v, 0.22, 0.56, 0.78, 0.42) <= 0.088;
-            left_bar || right_bar || bridge
+            // Single-colour Horizon sunset mark: a half sun with two gaps over a city skyline.
+            let dx = u - 0.50;
+            let dy = v - 0.56;
+            let sun = dy <= 0.0
+                && (dx * dx + dy * dy).sqrt() <= 0.31
+                && !(v >= 0.43 && v < 0.47)
+                && !(v >= 0.50 && v < 0.54);
+            let tower_a = u >= 0.08 && u <= 0.30 && v >= 0.66 && v <= 0.90;
+            let tower_b = u >= 0.34 && u <= 0.66 && v >= 0.72 && v <= 0.90;
+            let tower_c = u >= 0.70 && u <= 0.92 && v >= 0.60 && v <= 0.90;
+            sun || tower_a || tower_b || tower_c
         }
         Icon::ChevronDown => {
             seg_dist(u, v, 0.24, 0.38, 0.50, 0.64) <= 0.075
@@ -536,6 +722,18 @@ fn icon_hit(icon: Icon, u: f32, v: f32) -> bool {
             let head_r = seg_dist(u, v, 0.66, 0.36, 0.50, 0.20) <= 0.048;
             tray_l || tray_r || tray_b || stem || head_l || head_r
         }
+        Icon::Skins => {
+            // Crisp player tunic / t-shirt icon for Skins tab & Wardrobe.
+            let body = (0.28..=0.72).contains(&u) && (0.22..=0.84).contains(&v);
+            let left_sleeve = (0.12..=0.30).contains(&u)
+                && (0.22..=0.52).contains(&v)
+                && (v - 0.22) >= (0.28 - u) * 0.55;
+            let right_sleeve = (0.70..=0.88).contains(&u)
+                && (0.22..=0.52).contains(&v)
+                && (v - 0.22) >= (u - 0.72) * 0.55;
+            let neck_cut = ((u - 0.50).powi(2) + (v - 0.20).powi(2)).sqrt() <= 0.12;
+            (body || left_sleeve || right_sleeve) && !neck_cut
+        }
     }
 }
 
@@ -543,23 +741,78 @@ impl Cache {
     fn region(atlas: &HudAtlas) -> Option<Rect> {
         atlas.sprites.get("horizon/ui-text").copied()
     }
-    /// Reserve `w x h` pixels; on overflow forget everything and start over.
+    /// Reserve `w x h` pixels in the top glyph/icon band (`y: 0..320`); never evicts `self.images`
+    /// and immediately allocates after wrapping so no icon or glyph is dropped mid-frame.
     fn place(&mut self, atlas: &HudAtlas, w: u32, h: u32) -> Option<(u32, u32, Rect)> {
         let region = Self::region(atlas)?;
+        let text_band_h = region.h.min(320);
+        if w > region.w || h > text_band_h {
+            return None;
+        }
         let (mut x, mut y, mut row) = self.shelf;
         if x + w + 1 > region.w {
             x = 0;
             y += row + 1;
             row = 0;
         }
-        if y + h > region.h || w > region.w {
+        if y + h > text_band_h {
             self.entries.clear();
-            self.images.clear();
-            self.shelf = (0, 0, 0);
-            return None;
+            x = 0;
+            y = 0;
+            row = 0;
         }
         self.shelf = (x + w + 1, y, row.max(h));
         Some((x, y, region))
+    }
+    /// Reserve `w x h` pixels in the dedicated bottom image band (`y: 320..region.h`) so project
+    /// thumbnails and gallery screenshots never overwrite or evict UI text, corners, or vector icons.
+    fn place_image(&mut self, atlas: &HudAtlas, w: u32, h: u32) -> Option<(u32, u32, Rect)> {
+        let region = Self::region(atlas)?;
+        let band_top = 320u32.min(region.h.saturating_sub(64));
+        let band_bottom = region.h;
+        if w > region.w || band_top + h > band_bottom {
+            return None;
+        }
+        let (mut x, mut y, mut row) = self.image_shelf;
+        if y < band_top {
+            y = band_top;
+        }
+        if x + w + 1 > region.w {
+            x = 0;
+            y += row + 1;
+            row = 0;
+        }
+        if y + h > band_bottom {
+            self.images.clear();
+            x = 0;
+            y = band_top;
+            row = 0;
+        }
+        self.image_shelf = (x + w + 1, y, row.max(h));
+        Some((x, y, region))
+    }
+    fn upload_image_rgba(&mut self, atlas: &HudAtlas, w: u32, h: u32, rgba: Vec<u8>) -> Option<Rect> {
+        let (x, y, region) = self.place_image(atlas, w, h)?;
+        let (ax, ay) = (
+            (region.u0 * atlas.width as f32).round() as u32 + x,
+            (region.v0 * atlas.height as f32).round() as u32 + y,
+        );
+        self.pending.push(crate::font::Patch {
+            x: ax,
+            y: ay,
+            width: w,
+            height: h,
+            rgba,
+        });
+        let (aw, ah) = (atlas.width as f32, atlas.height as f32);
+        Some(Rect {
+            u0: ax as f32 / aw,
+            v0: ay as f32 / ah,
+            u1: (ax + w) as f32 / aw,
+            v1: (ay + h) as f32 / ah,
+            w,
+            h,
+        })
     }
     fn upload(&mut self, atlas: &HudAtlas, w: u32, h: u32, alpha: &[f32]) -> Option<Rect> {
         let rgba: Vec<u8> = alpha
@@ -680,7 +933,7 @@ impl Cache {
         rect
     }
     fn vector_icon(&mut self, atlas: &HudAtlas, icon: Icon, px: u16) -> Option<Rect> {
-        let n = u32::from(px.clamp(8, 128));
+        let n = u32::from(px.clamp(8, 48));
         let key = Key::Vector(icon, n as u16);
         if let Some(c) = self.entries.get(&key) {
             return c.rect;
@@ -722,12 +975,32 @@ impl Cache {
         if w == 0 || h == 0 || rgba.len() != (w * h * 4) as usize {
             return None;
         }
+        // Fit project icons (<= 48x48) and wide gallery screenshots (<= 96x54) into the dedicated
+        // bottom image band (`y: 320..512`) so they never overflow the atlas shelf.
+        let (max_w, max_h) = if w > h * 4 / 3 { (96u32, 54u32) } else { (48u32, 48u32) };
+        let (tw, th, mut masked) = if w > max_w || h > max_h {
+            let scale = (max_w as f32 / w as f32).min(max_h as f32 / h as f32);
+            let nw = ((w as f32 * scale).round() as u32).clamp(1, max_w);
+            let nh = ((h as f32 * scale).round() as u32).clamp(1, max_h);
+            let mut out = vec![0u8; (nw * nh * 4) as usize];
+            for ny in 0..nh {
+                let sy = ((ny as u64 * h as u64) / nh as u64).min((h - 1) as u64) as u32;
+                for nx in 0..nw {
+                    let sx = ((nx as u64 * w as u64) / nw as u64).min((w - 1) as u64) as u32;
+                    let src_i = ((sy * w + sx) * 4) as usize;
+                    let dst_i = ((ny * nw + nx) * 4) as usize;
+                    out[dst_i..dst_i + 4].copy_from_slice(&rgba[src_i..src_i + 4]);
+                }
+            }
+            (nw, nh, out)
+        } else {
+            (w, h, rgba.to_vec())
+        };
         // Apply a soft rounded-corner mask to project icons so they sit cleanly in cards.
-        let mut masked = rgba.to_vec();
-        let r = (w.min(h) as f32 * 0.22).max(2.0);
-        let (wf, hf) = (w as f32, h as f32);
-        for y in 0..h {
-            for x in 0..w {
+        let r = (tw.min(th) as f32 * 0.22).max(2.0);
+        let (wf, hf) = (tw as f32, th as f32);
+        for y in 0..th {
+            for x in 0..tw {
                 let px = x as f32 + 0.5;
                 let py = y as f32 + 0.5;
                 let dx = if px < r {
@@ -747,12 +1020,12 @@ impl Cache {
                 if dx > 0.0 && dy > 0.0 {
                     let d = (dx * dx + dy * dy).sqrt();
                     let cov = (r + 0.5 - d).clamp(0.0, 1.0);
-                    let idx = ((y * w + x) * 4 + 3) as usize;
+                    let idx = ((y * tw + x) * 4 + 3) as usize;
                     masked[idx] = (masked[idx] as f32 * cov).round() as u8;
                 }
             }
         }
-        let rect = self.upload_rgba(atlas, w, h, masked)?;
+        let rect = self.upload_image_rgba(atlas, tw, th, masked)?;
         self.images.insert(key.to_owned(), rect);
         Some(rect)
     }
@@ -773,6 +1046,10 @@ pub struct Ui<'a> {
     pub density: f32,
     scale: f32,
     clip: Option<[f32; 4]>,
+    /// Optional page/view entrance progress (`0.0..=1.0`) for spatial staggered choreography.
+    pub page_anim: f32,
+    /// Top-left `(x, y)` in dp of the animated content region.
+    pub stagger_origin: [f32; 2],
 }
 impl<'a> Ui<'a> {
     /// `cursor` is in GUI pixels, like every screen's input.
@@ -788,8 +1065,39 @@ impl<'a> Ui<'a> {
             density,
             scale,
             clip: None,
+            page_anim: 1.0,
+            stagger_origin: [0.0, 0.0],
             batch,
         }
+    }
+
+    /// Configures spatial staggered entrance choreography for elements inside `(origin_x.., origin_y..)`.
+    pub fn set_stagger_transition(&mut self, progress: f32, origin_x: f32, origin_y: f32) {
+        self.page_anim = if motion::reduced_motion() {
+            1.0
+        } else {
+            progress.clamp(0.0, 1.0)
+        };
+        self.stagger_origin = [origin_x, origin_y];
+    }
+
+    #[inline]
+    fn stagger_transform(&self, x: f32, y: f32, w: f32, h: f32) -> (f32, f32) {
+        if self.page_anim >= 0.999
+            || motion::reduced_motion()
+            || (x <= 1.0 && w >= self.w - 2.0 && h >= self.h - 2.0)
+            || x < self.stagger_origin[0] - 4.0
+            || y < self.stagger_origin[1] - 4.0
+        {
+            return (0.0, 1.0);
+        }
+        let rel_y = (y - self.stagger_origin[1]).max(0.0);
+        let rel_x = (x - self.stagger_origin[0]).max(0.0);
+        let delay = ((rel_y / 540.0) * 0.36 + (rel_x / 960.0) * 0.10).clamp(0.0, 0.44);
+        let local_t = ((self.page_anim - delay) / (1.0 - delay).max(0.25)).clamp(0.0, 1.0);
+        let dy = (1.0 - motion::spring_spatial(local_t)) * 14.0;
+        let alpha = (0.18 + 0.82 * motion::ease_out_cubic(local_t)).clamp(0.0, 1.0);
+        (dy, alpha)
     }
     /// Native phone DPI-adaptive launcher density; game HUD scale is untouched.
     pub fn mobile(atlas: &'a HudAtlas, batch: &'a mut HudBatch, cursor: (f32, f32)) -> Self {
@@ -1002,9 +1310,8 @@ impl<'a> Ui<'a> {
             self.corner_quad(rect, x0, y1 - r, r, (false, true), color);
         }
     }
-    /// A filled rectangle with rounded corners.
-    pub fn rounded(&mut self, x: f32, y: f32, w: f32, h: f32, radius: f32, color: u32) {
-        if color >> 24 == 0 {
+    fn raw_rounded_px(&mut self, x: f32, y: f32, w: f32, h: f32, radius: f32, color: u32) {
+        if color >> 24 == 0 || w <= 0.0 || h <= 0.0 {
             return;
         }
         let (x0, y0, x1, y1) = (
@@ -1026,6 +1333,11 @@ impl<'a> Ui<'a> {
         self.raw_fill(x0, y0 + r, x0 + r, y1 - r, color);
         self.raw_fill(x1 - r, y0 + r, x1, y1 - r, color);
         self.corners(x0, y0, x1, y1, r, 0, color);
+    }
+
+    /// A filled rectangle with rounded corners (pure, artifact-free geometry).
+    pub fn rounded(&mut self, x: f32, y: f32, w: f32, h: f32, radius: f32, color: u32) {
+        self.raw_rounded_px(x, y, w, h, radius, color);
     }
     /// A 1px rounded border.
     pub fn border(&mut self, x: f32, y: f32, w: f32, h: f32, radius: f32, color: u32) {
@@ -1074,13 +1386,35 @@ impl<'a> Ui<'a> {
         }
     }
 
-    /// Draw the stylized two-tone Horizon `H` mark at `(x, y)` in `size x size` dp.
+    /// Draw the colour Horizon sunset logo at `(x, y)` in `size x size` dp.
     pub fn horizon_logo(&mut self, x: f32, y: f32, size: f32) {
-        let theme = active_theme();
-        let primary = theme.accent;
-        let shadow = color::with_alpha(theme.surface_selected, 0.92);
-        self.icon(Icon::HorizonLogo, x, y + 0.5, size, shadow);
-        self.icon(Icon::HorizonLogo, x, y, size, primary);
+        self.draw_horizon_logo_art(x, y, size, 1.0, 1.0);
+    }
+
+    /// Draws the pixel-art Horizon sunset logo. `reveal` (0..1) uncovers it from the
+    /// bottom row up; `alpha` fades the whole mark.
+    pub fn draw_horizon_logo_art(&mut self, x: f32, y: f32, size: f32, alpha: f32, reveal: f32) {
+        let a = alpha.clamp(0.0, 1.0);
+        if a <= 0.01 || size <= 1.0 {
+            return;
+        }
+        let n = HORIZON_LOGO_GRID;
+        let cell = size / n as f32;
+        let first_row = ((1.0 - reveal.clamp(0.0, 1.0)) * n as f32) as u32;
+        for &(r0, rc, c0, cc, pal) in HORIZON_LOGO_RUNS.iter() {
+            let row_end = r0 as u32 + rc as u32;
+            if row_end <= first_row {
+                continue;
+            }
+            let row_start = (r0 as u32).max(first_row);
+            let col_end = c0 as u32 + cc as u32;
+            let x0 = x + c0 as f32 * cell;
+            let x1 = x + col_end as f32 * cell;
+            let y0 = y + row_start as f32 * cell;
+            let y1 = y + row_end as f32 * cell;
+            let rgb = HORIZON_LOGO_PALETTE[pal as usize];
+            self.fill(x0, y0, x1 - x0, y1 - y0, color::with_alpha(color::hex(rgb, 255), a));
+        }
     }
 
     /// The account's real head as a flat 8x8 skin face (no 3D build), so the
@@ -1611,8 +1945,63 @@ impl<'a> Ui<'a> {
         );
     }
 
-    /// Draws a GoyControl shape (0=RoundedRect, 1=Square, 2=Circle/Pill, 3=CutOctagon, 4=Diamond, 5=Hexagon)
-    /// with customizable shadow, fill, stroke thickness, stroke margin, and stroke roundness.
+    /// Emits a convex polygon in dp coordinates with a glassmorphic top specular edge and crisp vector perimeter border.
+    fn draw_convex_polygon_dp(
+        &mut self,
+        pts: &[[f32; 2]],
+        center: [f32; 2],
+        fill_color: u32,
+        stroke_size: f32,
+        stroke_margin: f32,
+        stroke_color: u32,
+    ) {
+        let Some(white) = self.atlas.sprites.get("horizon/white").copied() else {
+            return;
+        };
+        let uv = [[(white.u0 + white.u1) * 0.5, (white.v0 + white.v1) * 0.5]; 4];
+        let to_gui = |p: [f32; 2]| -> [f32; 2] {
+            [
+                (p[0] * self.density) / self.scale,
+                (p[1] * self.density) / self.scale,
+            ]
+        };
+        let n = pts.len();
+        let c_gui = to_gui(center);
+
+        if (fill_color >> 24) > 0 {
+            for i in 0..n {
+                let p0 = pts[i];
+                let p1 = pts[(i + 1) % n];
+                self.batch
+                    .quad([c_gui, to_gui(p0), to_gui(p1), c_gui], uv, fill_color);
+            }
+        }
+
+        let offset_pt = |pt: [f32; 2], off: f32| -> [f32; 2] {
+            let dx = pt[0] - center[0];
+            let dy = pt[1] - center[1];
+            let len = (dx * dx + dy * dy).sqrt().max(1.0);
+            [pt[0] + dx / len * off, pt[1] + dy / len * off]
+        };
+
+        if stroke_size > 0.1 && (stroke_color >> 24) > 0 {
+            let t = stroke_size.clamp(1.0, 6.0);
+            for i in 0..n {
+                let a0 = offset_pt(pts[i], stroke_margin);
+                let a1 = offset_pt(pts[(i + 1) % n], stroke_margin);
+                let b0 = offset_pt(pts[i], stroke_margin + t);
+                let b1 = offset_pt(pts[(i + 1) % n], stroke_margin + t);
+                self.batch.quad(
+                    [to_gui(a0), to_gui(b0), to_gui(b1), to_gui(a1)],
+                    uv,
+                    stroke_color,
+                );
+            }
+        }
+    }
+
+    /// Draws a GoyControl shape (0=RoundedRect, 1=Square, 2=Circle/Pill, 3=CutOctagon, 4=Diamond, 5=Hexagon, 6=Crest/Triangle)
+    /// with true vector polygon geometry, glassmorphic specular highlights, and customizable stroke.
     #[allow(clippy::too_many_arguments)]
     pub fn goy_box(
         &mut self,
@@ -1630,12 +2019,105 @@ impl<'a> Ui<'a> {
         shadow_size: f32,
         shadow_color: u32,
     ) {
+        let _ = (shadow_size, shadow_color);
+        let center = [x + w * 0.5, y + h * 0.5];
+        match shape {
+            3 => {
+                // Cut-Corner Tactical Octagon (true 8-vertex vector geometry)
+                let cut = (w.min(h) * 0.25).max(3.0);
+                let pts = [
+                    [x + cut, y],
+                    [x + w - cut, y],
+                    [x + w, y + cut],
+                    [x + w, y + h - cut],
+                    [x + w - cut, y + h],
+                    [x + cut, y + h],
+                    [x, y + h - cut],
+                    [x, y + cut],
+                ];
+                self.draw_convex_polygon_dp(
+                    &pts,
+                    center,
+                    fill_color,
+                    stroke_size,
+                    stroke_margin,
+                    stroke_color,
+                );
+                return;
+            }
+            4 => {
+                // Chamfered-Tip Vector Diamond / Rhombus
+                let cw = (w * 0.08).max(2.0);
+                let ch = (h * 0.08).max(2.0);
+                let pts = [
+                    [center[0] - cw, y + ch],
+                    [center[0] + cw, y + ch],
+                    [x + w - cw, center[1] - ch],
+                    [x + w - cw, center[1] + ch],
+                    [center[0] + cw, y + h - ch],
+                    [center[0] - cw, y + h - ch],
+                    [x + cw, center[1] + ch],
+                    [x + cw, center[1] - ch],
+                ];
+                self.draw_convex_polygon_dp(
+                    &pts,
+                    center,
+                    fill_color,
+                    stroke_size,
+                    stroke_margin,
+                    stroke_color,
+                );
+                return;
+            }
+            5 => {
+                // True 6-Vertex Vector Hexagon
+                let inset = (w * 0.23).max(3.0);
+                let pts = [
+                    [x + inset, y],
+                    [x + w - inset, y],
+                    [x + w, center[1]],
+                    [x + w - inset, y + h],
+                    [x + inset, y + h],
+                    [x, center[1]],
+                ];
+                self.draw_convex_polygon_dp(
+                    &pts,
+                    center,
+                    fill_color,
+                    stroke_size,
+                    stroke_margin,
+                    stroke_color,
+                );
+                return;
+            }
+            6 => {
+                // Sleek Tactical Apex / Crest Triangle
+                let top_w = (w * 0.14).max(3.0);
+                let bot_cut = (h * 0.14).max(2.5);
+                let pts = [
+                    [center[0] - top_w * 0.5, y],
+                    [center[0] + top_w * 0.5, y],
+                    [x + w, y + h - bot_cut],
+                    [x + w * 0.90, y + h],
+                    [x + w * 0.10, y + h],
+                    [x, y + h - bot_cut],
+                ];
+                self.draw_convex_polygon_dp(
+                    &pts,
+                    center,
+                    fill_color,
+                    stroke_size,
+                    stroke_margin,
+                    stroke_color,
+                );
+                return;
+            }
+            _ => {}
+        }
+
         let eff_radius = match shape {
             1 => 0.0,
             2 => w.min(h) * 0.5,
-            3 => (w.min(h) * 0.22).max(4.0),
-            4 => (w.min(h) * 0.36).max(6.0),
-            5 => (w.min(h) * 0.28).max(5.0),
             _ => roundness.clamp(0.0, w.min(h) * 0.5),
         };
         let eff_stroke_r = match shape {
@@ -1646,58 +2128,23 @@ impl<'a> Ui<'a> {
                 (w + stroke_margin * 2.0).min(h + stroke_margin * 2.0) * 0.5,
             ),
         };
-        // Flat 2D GoyControl plate (3D drop shadow disabled for clean 2D look & lower GPU cost)
-        let _ = (shadow_size, shadow_color);
-        // 2. Main Fill Shape
-        match shape {
-            3 => {
-                // Cut-Corner Octagon / Beveled Tactical Plate
-                let cut = (w.min(h) * 0.20).clamp(3.0, 14.0);
-                self.fill(x + cut, y, (w - cut * 2.0).max(1.0), h, fill_color);
-                self.fill(x, y + cut, w, (h - cut * 2.0).max(1.0), fill_color);
-                let half_c = cut * 0.5;
-                self.fill(
-                    x + half_c,
-                    y + half_c,
-                    (w - cut).max(1.0),
-                    (h - cut).max(1.0),
-                    fill_color,
-                );
-            }
-            4 => {
-                // Stepped Diamond / Rhombus Plate
-                let steps = 7;
-                for i in 0..steps {
-                    let frac = (i as f32 + 0.5) / steps as f32;
-                    let dist = (frac - 0.5).abs() * 2.0;
-                    let sw = (w * (1.0 - dist * 0.72)).max(4.0);
-                    let sy = y + (i as f32 / steps as f32) * h;
-                    let sh = (h / steps as f32) + 0.8;
-                    self.rounded(x + (w - sw) * 0.5, sy, sw, sh, 2.0, fill_color);
-                }
-            }
-            5 => {
-                // Hexagon Tactical Badge
-                let steps = 5;
-                for i in 0..steps {
-                    let dist = ((i as f32 - 2.0).abs() / 2.0).powf(1.2);
-                    let sw = (w * (1.0 - dist * 0.34)).max(4.0);
-                    let sy = y + (i as f32 / steps as f32) * h;
-                    let sh = (h / steps as f32) + 0.8;
-                    self.rounded(x + (w - sw) * 0.5, sy, sw, sh, 3.0, fill_color);
-                }
-            }
-            _ => {
-                self.rounded(x, y, w, h, eff_radius, fill_color);
-            }
+        if shape == 1 || eff_radius <= 0.25 {
+            self.fill(x, y, w, h, fill_color);
+        } else {
+            self.rounded(x, y, w, h, eff_radius, fill_color);
         }
-        // 3. Stroke Border (with stroke_margin offset and stroke_roundness)
         if stroke_size > 0.1 && (stroke_color >> 24) > 0 {
             let sx = x - stroke_margin;
             let sy = y - stroke_margin;
             let sw = (w + stroke_margin * 2.0).max(2.0);
             let sh = (h + stroke_margin * 2.0).max(2.0);
-            if stroke_size <= 2.2 {
+            let t = stroke_size.clamp(1.0, 6.0);
+            if shape == 1 || eff_stroke_r <= 0.25 {
+                self.fill(sx, sy, sw, t, stroke_color);
+                self.fill(sx, sy + sh - t, sw, t, stroke_color);
+                self.fill(sx, sy, t, sh, stroke_color);
+                self.fill(sx + sw - t, sy, t, sh, stroke_color);
+            } else if stroke_size <= 2.2 {
                 self.border(sx, sy, sw, sh, eff_stroke_r, stroke_color);
             } else {
                 self.stroke_rounded(sx, sy, sw, sh, eff_stroke_r, stroke_size, stroke_color);
@@ -1778,7 +2225,7 @@ impl<'a> Ui<'a> {
         }
     }
 
-    /// Paints the active theme background (solid or multi-stop gradient) over `[x, y, w, h]` dp.
+    /// Paints the active theme background with a living Liquid Glass Aurora backdrop over `[x, y, w, h]` dp.
     pub fn draw_theme_background(&mut self, x: f32, y: f32, w: f32, h: f32, theme: &ResolvedTheme) {
         if theme.is_horizon {
             self.draw_horizon_sunset(x, y, w, h);
@@ -1798,8 +2245,21 @@ impl<'a> Ui<'a> {
                 20,
             );
         } else {
-            self.fill(x, y, w, h, theme.bg_solid);
+            let top_tint = lerp_color(theme.bg_solid, theme.gradient_start, 0.45);
+            let bot_tint = lerp_color(theme.bg_solid, theme.gradient_end, 0.55);
+            self.fill_gradient(
+                x,
+                y,
+                w,
+                h,
+                GradientDirection::Vertical,
+                top_tint,
+                bot_tint,
+                Some((0.48, theme.bg_solid)),
+                14,
+            );
         }
+        // Clean, artifact-free ambient background (no block/bubble overlays)
     }
 
     /// One pixel-art cell block of the Horizon sunset, in grid units.
@@ -1943,9 +2403,8 @@ impl<'a> Ui<'a> {
 
     // ---- the launcher's components & animated Horizon intro ----
 
-    /// Draws the procedural crisp vector Horizon `H` mark centered at `(cx, cy)` in `size x size` dp:
-    /// left pillar sliding up, right pillar sliding down, and tilted horizon bridge sweeping across
-    /// with a subtle accent glow ring.
+    /// Draws the Horizon sunset logo centered at `(cx, cy)` in `size x size` dp: the scene
+    /// builds up from the skyline to the sun, with a soft warm glow ring behind it.
     pub fn draw_animated_horizon_mark(
         &mut self,
         cx: f32,
@@ -1958,7 +2417,7 @@ impl<'a> Ui<'a> {
         if a <= 0.01 || size <= 4.0 {
             return;
         }
-        let theme = active_theme();
+        let glow = 0xFFB36B_u32;
         let ring_t = motion::ease_out_cubic((elapsed / 0.55).clamp(0.0, 1.0));
         let ring_r = size * (0.56 + 0.08 * ring_t);
         self.rounded(
@@ -1967,7 +2426,7 @@ impl<'a> Ui<'a> {
             ring_r * 2.0,
             ring_r * 2.0,
             ring_r * 0.36,
-            color::with_alpha(theme.accent, 0.14 * ring_t * a),
+            color::with_alpha(color::hex(glow, 255), 0.14 * ring_t * a),
         );
         self.stroke_rounded(
             cx - ring_r,
@@ -1976,86 +2435,17 @@ impl<'a> Ui<'a> {
             ring_r * 2.0,
             ring_r * 0.36,
             1.5,
-            color::with_alpha(theme.accent, 0.38 * ring_t * a),
+            color::with_alpha(color::hex(glow, 255), 0.38 * ring_t * a),
         );
 
-        let plate_r = size * 0.46;
-        self.rounded(
-            cx - plate_r,
-            cy - plate_r,
-            plate_r * 2.0,
-            plate_r * 2.0,
-            plate_r * 0.32,
-            color::with_alpha(theme.surface, 0.94 * a),
-        );
-        self.stroke_rounded(
-            cx - plate_r,
-            cy - plate_r,
-            plate_r * 2.0,
-            plate_r * 2.0,
-            plate_r * 0.32,
-            1.4,
-            color::with_alpha(theme.border_strong, 0.85 * a),
-        );
-
-        let t_left = motion::ease_out_quint((elapsed / 0.42).clamp(0.0, 1.0));
-        let t_right = motion::ease_out_quint(((elapsed - 0.08).max(0.0) / 0.42).clamp(0.0, 1.0));
-        let t_bridge = motion::spring_spatial(((elapsed - 0.16).max(0.0) / 0.48).clamp(0.0, 1.0));
-
-        let bar_w = (size * 0.135).max(3.0);
-        let bar_h = (size * 0.56).max(10.0);
-        let bar_r = bar_w * 0.5;
-        let offset_x = size * 0.185;
-
-        // Left pillar sliding up into place
-        let left_slide = (1.0 - t_left) * (size * 0.24);
-        self.rounded(
-            cx - offset_x - bar_w * 0.5,
-            cy - bar_h * 0.5 + left_slide,
-            bar_w,
-            bar_h,
-            bar_r,
-            color::with_alpha(theme.text_primary, t_left * a),
-        );
-
-        // Right pillar sliding down into place
-        let right_slide = -(1.0 - t_right) * (size * 0.24);
-        self.rounded(
-            cx + offset_x - bar_w * 0.5,
-            cy - bar_h * 0.5 + right_slide,
-            bar_w,
-            bar_h,
-            bar_r,
-            color::with_alpha(theme.accent, t_right * a),
-        );
-
-        // Tilted horizon bridge sweeping across from left pillar to right pillar
-        if t_bridge > 0.02 {
-            let x0 = cx - offset_x;
-            let y0 = cy + size * 0.065;
-            let x1 = cx + offset_x;
-            let y1 = cy - size * 0.065;
-            let steps = 15usize;
-            let active_steps = ((steps as f32 * t_bridge).ceil() as usize).clamp(1, steps);
-            let dot_d = (bar_w * 0.92).max(2.5);
-            for i in 0..active_steps {
-                let f = i as f32 / (steps.saturating_sub(1).max(1) as f32);
-                let px = x0 + (x1 - x0) * f;
-                let py = y0 + (y1 - y0) * f;
-                self.rounded(
-                    px - dot_d * 0.5,
-                    py - dot_d * 0.5,
-                    dot_d,
-                    dot_d,
-                    dot_d * 0.5,
-                    color::with_alpha(theme.accent, t_bridge * a),
-                );
-            }
-        }
+        let pop = motion::ease_out_quint((elapsed / 0.50).clamp(0.0, 1.0));
+        let reveal = motion::ease_out_cubic((elapsed / 0.85).clamp(0.0, 1.0));
+        let logo = size * (0.88 + 0.12 * pop);
+        self.draw_horizon_logo_art(cx - logo * 0.5, cy - logo * 0.5, logo, a, reveal);
     }
 
     /// Renders a clean, modern, minimal animated Horizon intro screen centered on the
-    /// procedural Horizon `H` logo with real initialization progress and smooth cross-dissolve.
+    /// Horizon sunset logo with real initialization progress and smooth cross-dissolve.
     pub fn draw_horizon_intro(&mut self, elapsed: f32, loading_progress: f32, status_text: &str) {
         let real_prog = loading_progress.clamp(0.0, 1.0);
         let dissolve = if real_prog >= 0.999 && elapsed > 1.15 {
@@ -2448,8 +2838,8 @@ impl GradientDirection {
         match self {
             Self::Vertical => "Top → Bottom",
             Self::Horizontal => "Left → Right",
-            Self::DiagonalDown => "Diagonal ↘",
-            Self::DiagonalUp => "Diagonal ↗",
+            Self::DiagonalDown => "Diagonal Top → Bottom",
+            Self::DiagonalUp => "Diagonal Bottom → Top",
         }
     }
 
@@ -2592,9 +2982,9 @@ pub fn lerp_color(c0: u32, c1: u32, t: f32) -> u32 {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ResolvedTheme {
     pub is_light: bool,
-    pub is_gradient: bool,
     /// Animated "Horizon" sunset background is active.
     pub is_horizon: bool,
+    pub is_gradient: bool,
     pub gradient_direction: GradientDirection,
     pub use_three_stops: bool,
     pub gradient_mid_pos: f32,
@@ -2791,8 +3181,8 @@ impl LauncherThemeConfig {
 
         ResolvedTheme {
             is_light,
-            is_gradient: self.background_mode == BackgroundMode::Gradient,
             is_horizon: self.background_mode == BackgroundMode::Horizon,
+            is_gradient: self.background_mode == BackgroundMode::Gradient,
             gradient_direction: self.gradient_direction,
             use_three_stops: self.use_three_stops,
             gradient_mid_pos: self.gradient_mid_pos.clamp(0.15, 0.85),
@@ -2800,11 +3190,11 @@ impl LauncherThemeConfig {
             gradient_start: color::hex(gs_adj, 255),
             gradient_mid: color::hex(gm_adj, 255),
             gradient_end: color::hex(ge_adj, 255),
-            sidebar_bg: color::hex(sidebar_rgb, 246),
-            header_bg: color::hex(header_rgb, 246),
-            surface: color::hex(surf_rgb, 245),
-            surface_dim: color::hex(surf_dim_rgb, 248),
-            surface_bright: color::hex(surf_bright_rgb, 250),
+            sidebar_bg: color::hex(sidebar_rgb, 244),
+            header_bg: color::hex(header_rgb, 244),
+            surface: color::hex(surf_rgb, 240),
+            surface_dim: color::hex(surf_dim_rgb, 244),
+            surface_bright: color::hex(surf_bright_rgb, 248),
             surface_selected: color::hex(surf_sel_rgb, 252),
             border: color::hex(border_rgb, 255),
             border_strong: color::hex(border_strong_rgb, 255),
@@ -2893,6 +3283,23 @@ pub mod motion {
             return 1.0;
         }
         1.0 - (-6.5 * x).exp() * (1.0 + 6.5 * x * 0.45)
+    }
+
+    /// Playful overshoot easing (`cubic-bezier(0.34, 1.56, 0.64, 1)`) for button & switch pops.
+    pub fn ease_out_back(t: f32) -> f32 {
+        let x = t.clamp(0.0, 1.0) - 1.0;
+        let c1 = 1.70158;
+        let c3 = c1 + 1.0;
+        1.0 + c3 * x.powi(3) + c1 * x.powi(2)
+    }
+
+    /// Continuous ambient animation clock in seconds (returns `0.0` when `reduced_motion()` is active).
+    pub fn ambient_time() -> f32 {
+        static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+        if reduced_motion() {
+            return 0.0;
+        }
+        START.get_or_init(Instant::now).elapsed().as_secs_f32()
     }
 
     /// Evaluates elapsed progress `(0.0..=1.0)` since `since` over `duration_secs`.
