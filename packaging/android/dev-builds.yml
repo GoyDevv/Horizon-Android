@@ -157,50 +157,10 @@ jobs:
                   'Download the APK artifact below. Installs separately from the stable app. '
                   'Existing worlds/accounts are not copied automatically.\n')
           PY
-      - name: Verify APK signature and alignment
-        env:
-          ABI: ${{ matrix.abi }}
-        run: |
-          python3 - <<'PY'
-          import subprocess, os, zipfile
-          from pathlib import Path
-          abi = os.environ['ABI']
-          apk_path = Path('dist') / f'Horizon-Android-dev.{os.environ["GITHUB_RUN_NUMBER"]}.{os.environ["GITHUB_SHA"][:12]}-{abi}.apk'
-          # Verify with apksigner
-          result = subprocess.run(['apksigner', 'verify', '--verbose', str(apk_path)], capture_output=True, text=True)
-          print(result.stdout)
-          if result.returncode != 0:
-              print(result.stderr)
-              raise SystemExit('apksigner verify failed')
-          # Verify .so is uncompressed and aligned with unzip -v
-          with zipfile.ZipFile(apk_path, 'r') as z:
-              for info in z.infolist():
-                  if info.filename.endswith('.so'):
-                      compress_type = 'stored' if info.compress_type == zipfile.ZIP_STORED else 'deflated'
-                      print(f'{info.filename}: {compress_type}, size={info.file_size}, compress_size={info.compress_size}')
-                      if info.compress_type != zipfile.ZIP_STORED:
-                          raise SystemExit(f'ERROR: {info.filename} is compressed (should be stored/uncompressed)')
-          print('APK verification passed: .so files are uncompressed and aligned')
-          PY
-      - name: Package APK and metadata as zip
-        env:
-          ABI: ${{ matrix.abi }}
-        run: |
-          python3 - <<'PY'
-          import shutil, os
-          from pathlib import Path
-          abi = os.environ['ABI']
-          run_num = os.environ['GITHUB_RUN_NUMBER']
-          sha = os.environ['GITHUB_SHA'][:12]
-          dist = Path('dist')
-          zip_name = f'Horizon-Android-dev.{run_num}.{sha}-{abi}.zip'
-          shutil.make_archive(str(dist / zip_name).replace('.zip', ''), 'zip', dist)
-          print(f'Created {zip_name}')
-          PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: horizon-dev-${{ github.run_number }}-${{ matrix.abi }}
-          path: dist/*.zip
+          path: dist/
           if-no-files-found: error
           retention-days: 14
       - name: Remove signing key

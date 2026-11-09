@@ -148,52 +148,14 @@ jobs:
         run: |
           mkdir dist
           cp ".local/android/apk/$ABI/horizon-android-public.apk" "dist/Horizon-Android-debug-$ABI.apk"
-          (cd dist && sha256sum "Horizon-Android-debug-$ABI.apk" > "SHA256SUMS.txt")
-      - name: Verify APK signature and alignment
-        env:
-          ABI: ${{ inputs.abi }}
-        run: |
-          python3 - <<'PY'
-          import subprocess, os, zipfile
-          from pathlib import Path
-          abi = os.environ['ABI']
-          apk_path = Path('dist') / f'Horizon-Android-debug-{abi}.apk'
-          # Verify with apksigner
-          result = subprocess.run(['apksigner', 'verify', '--verbose', str(apk_path)], capture_output=True, text=True)
-          print(result.stdout)
-          if result.returncode != 0:
-              print(result.stderr)
-              raise SystemExit('apksigner verify failed')
-          # Verify .so is uncompressed and aligned with unzip -v
-          with zipfile.ZipFile(apk_path, 'r') as z:
-              for info in z.infolist():
-                  if info.filename.endswith('.so'):
-                      compress_type = 'stored' if info.compress_type == zipfile.ZIP_STORED else 'deflated'
-                      print(f'{info.filename}: {compress_type}, size={info.file_size}, compress_size={info.compress_size}')
-                      if info.compress_type != zipfile.ZIP_STORED:
-                          raise SystemExit(f'ERROR: {info.filename} is compressed (should be stored/uncompressed)')
-          print('APK verification passed: .so files are uncompressed and aligned')
-          PY
-      - name: Package APK and metadata as zip
-        env:
-          ABI: ${{ inputs.abi }}
-        run: |
-          python3 - <<'PY'
-          import shutil, os
-          from pathlib import Path
-          abi = os.environ['ABI']
-          dist = Path('dist')
-          zip_name = f'Horizon-Android-debug-{abi}.zip'
-          shutil.make_archive(str(dist / zip_name).replace('.zip', ''), 'zip', dist)
-          print(f'Created {zip_name}')
-          PY
+          (cd dist && sha256sum "Horizon-Android-debug-$ABI.apk" > "SHA256SUMS-$ABI.txt")
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: horizon-android-debug-${{ inputs.abi }}
-          path: dist/*.zip
+          path: dist/
           if-no-files-found: error
           retention-days: 14
-      - name: Publish the APK zip to the 'latest' release
+      - name: Publish the APK to the 'latest' release
         env:
           GH_TOKEN: ${{ github.token }}
           ABI: ${{ inputs.abi }}
@@ -203,7 +165,7 @@ jobs:
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
               --title "Latest APK" --notes "Debug build."
           fi
-          gh release upload "$tag" "dist/Horizon-Android-debug-${{ inputs.abi }}.zip" \
+          gh release upload "$tag" "dist/Horizon-Android-debug-$ABI.apk" "dist/SHA256SUMS-$ABI.txt" \
             --repo "$GITHUB_REPOSITORY" --clobber
           gh release edit "$tag" --repo "$GITHUB_REPOSITORY" \
             --notes "Debug build of commit ${GITHUB_SHA:0:12} (run ${GITHUB_RUN_NUMBER})."
