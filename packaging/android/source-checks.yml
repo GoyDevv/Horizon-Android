@@ -87,6 +87,8 @@ jobs:
     needs: source
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    permissions:
+      contents: write
     env:
       CARGO_BUILD_JOBS: '2'
       CARGO_PROFILE_DEV_DEBUG: '0'
@@ -146,10 +148,24 @@ jobs:
         run: |
           mkdir dist
           cp ".local/android/apk/$ABI/horizon-android-public.apk" "dist/Horizon-Android-debug-$ABI.apk"
-          (cd dist && sha256sum "Horizon-Android-debug-$ABI.apk" > SHA256SUMS.txt)
+          (cd dist && sha256sum "Horizon-Android-debug-$ABI.apk" > "SHA256SUMS-$ABI.txt")
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: horizon-android-debug-${{ inputs.abi }}
           path: dist/
           if-no-files-found: error
           retention-days: 14
+      - name: Publish the APK to the 'latest' release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ABI: ${{ inputs.abi }}
+        run: |
+          tag=latest
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
+              --title "Latest APK" --notes "Debug build."
+          fi
+          gh release upload "$tag" "dist/Horizon-Android-debug-$ABI.apk" "dist/SHA256SUMS-$ABI.txt" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" \
+            --notes "Debug build of commit ${GITHUB_SHA:0:12} (run ${GITHUB_RUN_NUMBER})."
