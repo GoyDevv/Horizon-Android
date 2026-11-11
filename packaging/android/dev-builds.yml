@@ -71,7 +71,10 @@ jobs:
               password = os.environ['RELEASE_KEYSTORE_PASSWORD']
               alias = os.environ['RELEASE_KEY_ALIAS']
           else:
-              raise SystemExit('Set ANDROID_KEYSTORE_BASE64 (or ANDROID_DEV_KEYSTORE_BASE64); see docs/android-dev-builds.md')
+              # A fork without either secret still builds a sideloadable dev APK: gradle
+              # falls back to the throwaway debug key the build generates (see
+              # docs/android-dev-builds.md to sign with a real key instead).
+              raise SystemExit(0)
           path = Path('.local/android/ci.keystore')
           path.parent.mkdir(parents=True, exist_ok=True)
           path.write_bytes(base64.b64decode(value, validate=True))
