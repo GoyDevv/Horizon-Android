@@ -18,6 +18,7 @@ horizon-client = { path = "../horizon-client", default-features = false }
 # horizon-client's sources compile into this crate too (`lib.path` above), so it needs
 # the same camera Overhaul dependency for `game/android_bundled.rs`.
 camera-overhaul-core = { path = "../camera-overhaul-core" }
+barrel-roll-core = { path = "../barrel-roll-core" }
 android_logger = "0.15"
 regex = "1"
 horizon-hdr = { path = "../horizon-hdr" }

@@ -14903,7 +14903,10 @@ impl Game<'_> {
         let (view_yaw, view_pitch) = self.shaken_view(view_yaw, view_pitch);
         // Camera Overhaul: its pitch and yaw join the camera angles (like a mod's
         // shake above); its roll banks the view itself, below.
-        let [co_pitch, co_yaw, camera_roll] = self.native_camera_overhaul();
+        let [co_pitch, co_yaw, camera_overhaul_roll] = self.native_camera_overhaul();
+        // Do a Barrel Roll's roll joins Camera Overhaul's; both are already in the
+        // view's own frame (GameRendererMixin / CameraMixin).
+        let camera_roll = camera_overhaul_roll + self.native_barrel_roll();
         let view_yaw = view_yaw + co_yaw;
         let view_pitch = (view_pitch + co_pitch).clamp(-90.0, 90.0);
         self.audio
@@ -18174,6 +18177,9 @@ impl Game<'_> {
                     self.extras_retry()?;
                     self.apply_mouse_look();
                     self.pad_look(elapsed.as_secs_f32());
+                    // Do a Barrel Roll folds this frame's look into the gliding
+                    // orientation before the flight moves and the frame renders.
+                    self.native_barrel_roll_frame(elapsed.as_secs_f64());
                     self.advance_flight();
                     self.tick_world_icon();
                     let ticked = Instant::now();

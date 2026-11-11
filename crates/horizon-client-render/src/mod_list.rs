@@ -150,10 +150,12 @@ impl ModList {
                     disabled.insert(id.to_owned());
                 }
             }
-            // Camera Overhaul is an importable `.hnmod` (not built in like the four
-            // above): off until the player turns it on.
-            if !enabled.contains("camera_overhaul") {
-                disabled.insert("camera_overhaul".to_owned());
+            // Importable `.hnmod` features (not built in like the four above): off
+            // until the player turns them on.
+            for id in ["camera_overhaul", "barrel_roll"] {
+                if !enabled.contains(id) {
+                    disabled.insert(id.to_owned());
+                }
             }
             disabled
         };

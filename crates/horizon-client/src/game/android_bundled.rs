@@ -152,6 +152,14 @@ struct DynamicRuntimeState {
     camera_overhaul: Option<camera_overhaul_core::CameraOverhaul>,
     /// This frame's offsets in degrees (pitch, yaw, roll), read by the renderer.
     camera_offset: [f32; 3],
+    /// Do a Barrel Roll (enjarai): the gliding orientation, while gliding.
+    barrel_roll: Option<barrel_roll_core::BarrelRoll>,
+    /// Look input gathered this frame, while gliding (`MouseMixin`).
+    barrel_roll_look: (f64, f64),
+    /// The camera roll in degrees, already negated (`CameraMixin`).
+    barrel_roll_roll: f32,
+    /// The one-time multiplayer warning has been shown.
+    barrel_roll_warned: bool,
 }
 
 static DYNAMIC_RUNTIME: OnceLock<Mutex<DynamicRuntimeState>> = OnceLock::new();
@@ -1259,6 +1267,18 @@ pub(super) fn native_settings(game: &mut Game<'_>, mod_id: &str, buttons: &mut V
         return;
     }
 
+    if m.features.contains("barrel_roll") {
+        let sensitivity = setting_u32(game, mod_id, "sensitivity", 100);
+        let banking = setting_u32(game, mod_id, "banking", 100);
+        let smoothing = setting_u32(game, mod_id, "smoothing", 100);
+        let invert = setting_bool(game, mod_id, "invert_y", false);
+        buttons.push(format!("Sensitivity: {sensitivity}%"));
+        buttons.push(format!("Banking: {banking}%"));
+        buttons.push(format!("Smoothing: {smoothing}%"));
+        buttons.push(format!("Invert Y: {}", on_off(invert)));
+        return;
+    }
+
     if !m.custom_buttons.is_empty() {
         for (idx, lbl) in m.custom_buttons.iter().enumerate() {
             let key = format!("opt_{idx}");
@@ -1588,6 +1608,25 @@ pub(super) fn native_settings_click(game: &mut Game<'_>, mod_id: &str, button: u
             }
             2 => {
                 toggle_setting_bool(game, mod_id, "third_person", true);
+            }
+            _ => {}
+        }
+        return;
+    }
+
+    if features.contains("barrel_roll") {
+        match button {
+            0 => {
+                cycle_u32(game, mod_id, "sensitivity", &[50, 75, 100, 125, 150, 200], 100);
+            }
+            1 => {
+                cycle_u32(game, mod_id, "banking", &[0, 25, 50, 75, 100, 150], 100);
+            }
+            2 => {
+                cycle_u32(game, mod_id, "smoothing", &[0, 50, 100, 150, 200], 100);
+            }
+            3 => {
+                toggle_setting_bool(game, mod_id, "invert_y", false);
             }
             _ => {}
         }
@@ -1945,12 +1984,40 @@ fn update_camera_overhaul(game: &Game<'_>, elapsed: Duration) {
         yaw: f64::from(game.yaw),
     };
 
+    // Do a Barrel Roll owns the roll while gliding: stand Camera Overhaul's own
+    // turning and strafing roll down so the two do not add up.
+    let barrel_rolling = p.fall_flying
+        && state
+            .mods
+            .values()
+            .any(|m| game.native_on(&m.id) && m.features.contains("barrel_roll"));
+    let defaults = Config::default();
+
     let off = {
         let co = state
             .camera_overhaul
             .get_or_insert_with(|| CameraOverhaul::new(Config::default()));
         co.config.general.enable_in_third_person =
             setting_bool(game, &mod_id, "third_person", true);
+        co.config.general.turning_roll_intensity = if barrel_rolling {
+            0.0
+        } else {
+            defaults.general.turning_roll_intensity
+        };
+        for (context, base) in [
+            (&mut co.config.walking, defaults.walking),
+            (&mut co.config.sprinting, defaults.sprinting),
+            (&mut co.config.swimming, defaults.swimming),
+            (&mut co.config.flying, defaults.flying),
+            (&mut co.config.mounts, defaults.mounts),
+            (&mut co.config.vehicles, defaults.vehicles),
+        ] {
+            context.strafing_roll_factor = if barrel_rolling {
+                0.0
+            } else {
+                base.strafing_roll_factor
+            };
+        }
         co.update(&ctx, elapsed.as_secs_f64())
     };
     // The mod's own Intensity slider scales the offsets, not the port's smoothing.
@@ -1960,6 +2027,137 @@ fn update_camera_overhaul(game: &Game<'_>, elapsed: Duration) {
         (off.yaw * k) as f32,
         (off.roll * k) as f32,
     ];
+}
+
+// ============================================================================
+// Do a Barrel Roll (enjarai & Jorbon, GPL-3.0; crates/barrel-roll-core)
+// ============================================================================
+
+/// The enabled `barrel_roll` mod, if the game is playing in the window.
+fn barrel_roll_mod_id(game: &Game<'_>, state: &DynamicRuntimeState) -> Option<String> {
+    state
+        .mods
+        .values()
+        .find(|m| game.native_on(&m.id) && m.features.contains("barrel_roll"))
+        .map(|m| m.id.clone())
+}
+
+/// Whether Do a Barrel Roll owns the look input right now: its mod is on and the
+/// local player is gliding. `turn_player` asks before turning the camera itself.
+pub(super) fn barrel_roll_active(game: &Game<'_>) -> bool {
+    if !game.native_window()
+        || !game.native_playing()
+        || !game.player.as_ref().is_some_and(|p| p.fall_flying)
+    {
+        return false;
+    }
+    runtime()
+        .lock()
+        .is_ok_and(|state| barrel_roll_mod_id(game, &state).is_some())
+}
+
+/// Take this frame's look input (`MouseMixin`: the deltas roll and pitch, so the
+/// camera must not turn with them).
+pub(super) fn barrel_roll_stash_look(xo: f64, yo: f64) {
+    if let Ok(mut state) = runtime().lock() {
+        state.barrel_roll_look.0 += xo;
+        state.barrel_roll_look.1 += yo;
+    }
+}
+
+/// The camera roll in degrees for this frame, already negated (`CameraMixin`
+/// hands the camera `-entity roll`).
+pub(super) fn native_barrel_roll() -> f32 {
+    runtime().lock().map_or(0.0, |state| state.barrel_roll_roll)
+}
+
+/// The settings page's values, on the ported config.
+fn configure_barrel_roll(co: &mut barrel_roll_core::BarrelRoll, game: &Game<'_>, mod_id: &str) {
+    let sensitivity = f64::from(setting_u32(game, mod_id, "sensitivity", 100)) / 100.0;
+    let banking = f64::from(setting_u32(game, mod_id, "banking", 100)) / 100.0;
+    let smoothing = (f64::from(setting_u32(game, mod_id, "smoothing", 100)) / 100.0).max(0.01);
+    let config = co.config_mut();
+    config.invert_pitch = setting_bool(game, mod_id, "invert_y", false);
+    // The port's defaults (1.0 on pitch and roll, 0.4 on yaw), scaled by the slider.
+    config.sensitivity.pitch = sensitivity;
+    config.sensitivity.yaw = 0.4 * sensitivity;
+    config.sensitivity.roll = sensitivity;
+    config.banking_strength = 20.0 * banking;
+    // A larger slider value smooths more: the smoother's amount is dt / smoothness.
+    config.smoothing.pitch = 1.0 / smoothing;
+    config.smoothing.yaw = 0.4 / smoothing;
+    config.smoothing.roll = 1.0 / smoothing;
+}
+
+/// Advance Do a Barrel Roll once a frame: fold this frame's look input and the
+/// strafe input into the gliding orientation, write the player's real yaw/pitch
+/// back so the flight and the server follow it, and blend the camera upright when
+/// gliding stops.
+pub(super) fn barrel_roll_frame(game: &mut Game<'_>, dt: f64) {
+    let mut state = match runtime().lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    let look = std::mem::take(&mut state.barrel_roll_look);
+    let running = game.native_window() && game.native_playing();
+    let mod_id = if running {
+        barrel_roll_mod_id(game, &state)
+    } else {
+        None
+    };
+    let Some(mod_id) = mod_id else {
+        state.barrel_roll = None;
+        state.barrel_roll_roll = 0.0;
+        return;
+    };
+
+    // Once, in multiplayer: no server protocol, but like any mod that moves the
+    // camera quickly, rolling can look suspicious to an anticheat.
+    if game.remote.is_some() && !state.barrel_roll_warned {
+        state.barrel_roll_warned = true;
+        game.system_message(horizon_client::text::Text::literal(
+            "Do a Barrel Roll: flight physics are unchanged, but rolling can look like rapid \
+             camera movement to a server's anticheat. Use at your own risk.",
+        ));
+    }
+
+    if !game.player.as_ref().is_some_and(|p| p.fall_flying) {
+        // Gliding stopped: blend the roll upright without a snap, then let go.
+        let roll = state.barrel_roll.as_mut().map_or(0.0, |co| co.settle(dt));
+        state.barrel_roll_roll = (-roll) as f32;
+        if roll == 0.0 {
+            state.barrel_roll = None;
+        }
+        return;
+    }
+
+    // The strafe input yaws: `move_vector[0]` is positive to the left.
+    let strafe = game
+        .player
+        .as_ref()
+        .map_or(0.0, |p| -f64::from(p.move_vector[0]));
+    let (yaw, pitch) = (f64::from(game.yaw), f64::from(game.pitch));
+    let fresh = state.barrel_roll.is_none();
+    let offset = {
+        let co = state
+            .barrel_roll
+            .get_or_insert_with(|| barrel_roll_core::BarrelRoll::new(Default::default()));
+        if fresh {
+            co.set_orientation(yaw, pitch);
+        }
+        configure_barrel_roll(co, game, &mod_id);
+        co.update(
+            barrel_roll_core::Input {
+                pitch: look.1,
+                roll: look.0,
+                yaw: strafe,
+            },
+            dt,
+        )
+    };
+    state.barrel_roll_roll = (-offset.roll) as f32;
+    game.yaw = crate::camera::wrap_degrees(offset.yaw as f32);
+    game.pitch = (offset.pitch as f32).clamp(-90.0, 90.0);
 }
 
 pub(super) fn native_hud(

@@ -11257,6 +11257,25 @@ impl Game<'_> {
         super::android_bundled::native_camera_overhaul()
     }
 
+    /// Do a Barrel Roll's camera roll in degrees for this frame, zero while it
+    /// rests. Turns the view like Camera Overhaul's roll.
+    pub(super) fn native_barrel_roll(&self) -> f32 {
+        super::android_bundled::native_barrel_roll()
+    }
+
+    /// Whether Do a Barrel Roll owns the look input right now: its mod is on and
+    /// the local player is gliding (`turn_player`).
+    pub(super) fn barrel_roll_active(&self) -> bool {
+        super::android_bundled::barrel_roll_active(self)
+    }
+
+    /// Advance Do a Barrel Roll one frame, before the flight physics and the
+    /// render: turn this frame's look and strafe input into the gliding
+    /// orientation and write the player's real yaw and pitch back.
+    pub(super) fn native_barrel_roll_frame(&mut self, dt: f64) {
+        super::android_bundled::barrel_roll_frame(self, dt);
+    }
+
     /// What native mods hand shader packs in this frame (`native_shader_params`),
     /// with values that aren't finite as 0.
     pub(super) fn native_shader_params_now(&self, partial: f32) -> [[f32; 4]; 8] {

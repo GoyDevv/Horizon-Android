@@ -133,8 +133,10 @@ jobs:
           key: android-dev-${{ runner.os }}-${{ matrix.abi }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'packaging/android/build.gradle') }}-${{ github.sha }}
           restore-keys: |
             android-dev-${{ runner.os }}-${{ matrix.abi }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'packaging/android/build.gradle') }}-
-      - name: Test the bundled Camera Overhaul crate
-        run: cargo test -p camera-overhaul-core
+      - name: Test the bundled Camera Overhaul and Barrel Roll crates
+        run: |
+          cargo test -p camera-overhaul-core
+          cargo test -p barrel-roll-core
       - name: Check public source and packaging boundaries
         run: |
           python3 tools/check_public_tree.py
@@ -171,6 +173,8 @@ jobs:
               shutil.copyfile(source, out / dest)
           # The importable Camera Overhaul bundle (Options > Mods > Import).
           shutil.copyfile('camera_overhaul.hnmod', out / 'camera_overhaul.hnmod')
+          # The importable Do a Barrel Roll bundle (Options > Mods > Import).
+          shutil.copyfile('barrel_roll.hnmod', out / 'barrel_roll.hnmod')
           (out / 'BUILD.json').write_text(json.dumps({'commit': sha, 'abi': abi, 'profile': 'release',
               'package': 'dev.horizon.android.dev', 'experimental': True,
               'run': f'https://github.com/{os.environ["GITHUB_REPOSITORY"]}/actions/runs/{os.environ["GITHUB_RUN_ID"]}'}, indent=2) + '\n')

@@ -270,6 +270,10 @@ pub fn canonical_horizon_mod_meta(mod_id: &str) -> Option<(&'static str, &'stati
             "Camera Overhaul",
             "Tilts and sways the camera as you move: turning and strafing roll, acceleration pitch, idle sway, plus shudders on explosions, lightning and hand swings.",
         )),
+        "barrel_roll" | "barrelroll" | "dobarrelroll" | "do_a_barrel_roll" | "cool_elytra" => Some((
+            "Do a Barrel Roll",
+            "Fly your elytra freely: drag to roll and pitch, lean into turns, and strafe to yaw, with banking and smoothing.",
+        )),
         "auto_totem" | "autototem" => Some((
             "Auto Totem Helper",
             "Displays remaining Totems of Undying on the HUD and warns when off-hand totem is depleted.",
@@ -627,6 +631,18 @@ pub fn infer_features_from_id_and_signals(
         || combined.contains("camera overhaul")
     {
         features.insert("camera_overhaul".to_owned());
+    }
+    if matches!(
+        id_low.as_str(),
+        "barrel_roll" | "barrelroll" | "dobarrelroll" | "do_a_barrel_roll" | "cool_elytra"
+    ) || combined.contains("barrelroll")
+        || combined.contains("barrel_roll")
+        || combined.contains("barrel roll")
+        || combined.contains("do a barrel roll")
+        || combined.contains("cool_elytra")
+        || combined.contains("elytra roll")
+    {
+        features.insert("barrel_roll".to_owned());
     }
     if features.is_empty() {
         features.insert("hud_overlay".to_owned());
@@ -2380,9 +2396,9 @@ fn mod_command(game: &mut Game<'_>, command: &str, ran: &mut bool) {{
 }
 
 
-/// Complete catalog of 25 official Horizon Native Mods (`.hnmod`) available in `Mods > Horizon`
-/// alongside the 4 `ANDROID_BUNDLED` mods (29 total = 3 pages of 10).
-pub const HORIZON_CATALOG_MODS: [(&str, &str, &str, u64); 25] = [
+/// Complete catalog of 26 official Horizon Native Mods (`.hnmod`) available in `Mods > Horizon`
+/// alongside the 4 `ANDROID_BUNDLED` mods (30 total = 3 pages of 10).
+pub const HORIZON_CATALOG_MODS: [(&str, &str, &str, u64); 26] = [
     (
         "wrench",
         "Wrench",
@@ -2478,6 +2494,12 @@ pub const HORIZON_CATALOG_MODS: [(&str, &str, &str, u64); 25] = [
         "Camera Overhaul",
         "Tilts and sways the camera as you move: turning and strafing roll, acceleration pitch, idle sway, plus shudders on explosions, lightning and hand swings.",
         77_300,
+    ),
+    (
+        "barrel_roll",
+        "Do a Barrel Roll",
+        "Fly your elytra freely: drag to roll and pitch, lean into turns, and strafe to yaw, with banking and smoothing.",
+        81_200,
     ),
     (
         "armor_status",
@@ -2756,7 +2778,7 @@ pub const HORIZON_LIBRARY_MODS: [(&str, &str, &str, u64); 36] = [
     ),
 ];
 
-/// Returns all 61 Horizon Mod Store entries (`HORIZON_CATALOG_MODS` + `HORIZON_LIBRARY_MODS`).
+/// Returns all 62 Horizon Mod Store entries (`HORIZON_CATALOG_MODS` + `HORIZON_LIBRARY_MODS`).
 pub fn all_horizon_catalog_mods() -> Vec<(&'static str, &'static str, &'static str, u64)> {
     let mut out = Vec::with_capacity(HORIZON_CATALOG_MODS.len() + HORIZON_LIBRARY_MODS.len());
     out.extend_from_slice(&HORIZON_CATALOG_MODS);
