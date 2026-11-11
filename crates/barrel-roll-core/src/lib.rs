@@ -12,12 +12,14 @@
 //! horizon widget and every server-side or sync feature.
 //!
 //! ```no_run
+//! # let (mut player_yaw, mut player_pitch) = (0.0_f64, 0.0_f64);
+//! # let (dy, dx, strafe, delta_seconds) = (0.0_f64, 0.0, 0.0, 1.0 / 60.0);
 //! let mut roll = barrel_roll_core::BarrelRoll::new(Default::default());
 //! roll.set_orientation(player_yaw, player_pitch); // when gliding starts
-//! let o = roll.update(barrel_roll_core::Input { pitch: dy, roll: dx, yaw: strafe }, dt);
+//! let o = roll.update(barrel_roll_core::Input { pitch: dy, roll: dx, yaw: strafe }, delta_seconds);
 //! player_yaw = o.yaw;   // the engine flies where you look
 //! player_pitch = o.pitch;
-//! camera_roll = -o.roll; // the view banks (CameraMixin: tempRoll = -entity roll)
+//! let camera_roll = -o.roll; // the view banks (CameraMixin: tempRoll = -entity roll)
 //! ```
 
 #![forbid(unsafe_code)]
