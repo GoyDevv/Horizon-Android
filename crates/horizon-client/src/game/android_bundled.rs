@@ -2156,7 +2156,7 @@ pub(super) fn barrel_roll_frame(game: &mut Game<'_>, dt: f64) {
         )
     };
     state.barrel_roll_roll = (-offset.roll) as f32;
-    game.yaw = crate::camera::wrap_degrees(offset.yaw as f32);
+    game.yaw = horizon_client_render::camera::wrap_degrees(offset.yaw as f32);
     game.pitch = (offset.pitch as f32).clamp(-90.0, 90.0);
 }
 
