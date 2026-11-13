@@ -645,6 +645,37 @@ pub fn infer_features_from_id_and_signals(
     features
 }
 
+/// The features the Android runtime implements itself (game/android_bundled.rs). A mod with none of them
+/// is only code to compile into the game: it does nothing until a native build with it is chosen.
+pub const EMULATED_FEATURES: [&str; 22] = [
+    "appleskin_hud",
+    "armor_status",
+    "carryblock",
+    "coords_hud",
+    "dynamic_lights",
+    "eating_animation",
+    "eatinganimation",
+    "enchantmenthints",
+    "fps_overlay",
+    "fullbright",
+    "immersive_thunder",
+    "jade_hud",
+    "keystrokes",
+    "motion_blur",
+    "rightclickharvest",
+    "shulkerpeek",
+    "toggle_sprint",
+    "treefall",
+    "veinminer",
+    "waypoints",
+    "wrench",
+    "zoom",
+];
+
+pub fn runs_in_process(features: &BTreeSet<String>) -> bool {
+    EMULATED_FEATURES.iter().any(|f| features.contains(*f))
+}
+
 /// Extracts `pub const DESCRIPTION: &str = "...";` or `description: "...".into()` from Rust source files.
 pub fn parse_rust_mod_metadata(rust_src: &str, mod_id: &str) -> (Option<String>, Option<String>, Vec<String>) {
     let mut title = None;
@@ -2965,6 +2996,19 @@ mod tests {
 
     fn inferred(id: &str, title: &str, description: &str, src: &str) -> BTreeSet<String> {
         infer_features_from_id_and_signals(id, title, description, src, &BTreeSet::new())
+    }
+
+    #[test]
+    fn only_mods_with_an_implemented_feature_run_in_process() {
+        assert!(runs_in_process(&inferred("wrench", "Wrench", "", "")));
+        assert!(runs_in_process(&inferred("zoomer", "Zoom", "", "")));
+        let menu = inferred("modmenu", "Mod Menu", "Lists every mod", "");
+        assert!(!runs_in_process(&menu), "{menu:?}");
+        let generic: BTreeSet<String> = ["hud_overlay", "tooltip", "registries", "content"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        assert!(!runs_in_process(&generic));
     }
 
     #[test]

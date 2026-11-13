@@ -556,13 +556,15 @@ fn native_mods_detail(built: &str) -> Option<String> {
     (!list.is_empty()).then_some(list)
 }
 
-fn not_built(dir: &std::path::Path, built: &str, rows: &[mod_list::Installed]) -> Vec<mod_list::Installed> {
+fn built_contains(built: &str, id: &str) -> bool {
     let info: serde_json::Value = serde_json::from_str(built).unwrap_or_default();
-    let in_build = |id: &str| {
-        info["mods"]
-            .as_array()
-            .is_some_and(|mods| mods.iter().any(|m| m["id"] == id || m.as_str() == Some(id)))
-    };
+    info["mods"]
+        .as_array()
+        .is_some_and(|mods| mods.iter().any(|m| m["id"] == id || m.as_str() == Some(id)))
+}
+
+fn not_built(dir: &std::path::Path, built: &str, rows: &[mod_list::Installed]) -> Vec<mod_list::Installed> {
+    let in_build = |id: &str| built_contains(built, id);
     let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
         .map(|d| d.flatten().map(|e| e.path()).collect())
         .unwrap_or_default();
@@ -702,6 +704,17 @@ impl Game<'_> {
                     Err(e) => {
                         #[cfg(target_os = "android")]
                         if let Some(dyn_mod) = super::android_bundled::parse_dynamic_hnmod(path) {
+                            if !horizon_client::jar_transpiler::runs_in_process(&dyn_mod.features) {
+                                return mod_list::Installed {
+                                    id: dyn_mod.id,
+                                    title: dyn_mod.title,
+                                    description: dyn_mod.description,
+                                    problem: Some(mod_list::NOT_BUILT.to_owned()),
+                                    dev: false,
+                                    has_settings: false,
+                                    native: None,
+                                };
+                            }
                             return mod_list::Installed {
                                 id: dyn_mod.id.clone(),
                                 title: dyn_mod.title.clone(),
@@ -779,6 +792,11 @@ impl Game<'_> {
                     .iter()
                     .any(|m| m.native.is_some()),
         );
+        for row in &mut self.settings.mods.installed {
+            if row.problem.as_deref() == Some(mod_list::NOT_BUILT) && built_contains(&built, &row.id) {
+                row.problem = None;
+            }
+        }
         let native_dir = Self::game_dir().join(mod_list::NATIVE_DIR);
         let unbuilt = not_built(&native_dir, &built, &self.settings.mods.installed);
         self.settings.mods.installed.extend(unbuilt);

@@ -1,14 +1,11 @@
-//! Bundled official Android native mods + Live In-Process `.hnmod` & `.jar` Runtime Engine.
+//! Bundled official Android native mods, and the in-process stand-ins for popular mods.
 //!
-//! All installed `.hnmod` and transpiled Modrinth/Java `.jar` mods are automatically compiled
-//! in the Horizon Launcher and executed live in-process here — with zero manual build steps,
-//! zero "Try again" dialogs, and full support for authentic per-mod Settings, HUD overlays,
-//! tooltips, Wrench block rotation & machine dismantling, Veinminer BFS ore harvesting with
-//! real item drops, TreeFall/Chop! tree felling with leaf decay, RightClickHarvest crop
-//! harvesting & replanting, AppleSkin saturation/hunger HUD & tooltips, LookAt/Jade top-center
-//! block inspection, Fullbright gamma & cave lighting, Carry Block, Keystrokes, FPS Counter,
-//! Coordinates HUD, Armor Status, Enchantment Hints, ShulkerPeek, Toggle Sprint, and
-//! ImmersiveThunder acoustics & camera rumble.
+//! A `.hnmod` or transpiled `.jar` whose id or title names a feature implemented here (see
+//! `jar_transpiler::EMULATED_FEATURES`) runs live in-process with its own settings, HUD overlays and
+//! hooks: Wrench, Veinminer, TreeFall, RightClickHarvest, AppleSkin, LookAt/Jade, Fullbright, Carry
+//! Block, Keystrokes, FPS Counter, Coordinates HUD, Armor Status, Enchantment Hints, ShulkerPeek,
+//! Toggle Sprint, Zoom, Waypoints and ImmersiveThunder. Any other native mod is only code for the game
+//! to be compiled with: it is listed as not built until a native build that contains it is chosen.
 
 use super::*;
 use super::native_hooks::*;

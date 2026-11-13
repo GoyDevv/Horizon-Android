@@ -8,8 +8,13 @@
 //! Horizon Android's releases (its APKs are named after it) and preview builds of Horizon
 //! (`horizon-preview-...`): only an APK named `horizon-<version>-...` is an update.
 
-/// The repositories, as GitHub's API names them, the organisation's first.
-pub const REPOSITORIES: [&str; 2] = ["horizon-rust/horizon-android", "horizon-rust/horizon"];
+/// The repositories, as GitHub's API names them, the organisation's first. This fork's own is last: its
+/// native-mods.yml publishes builds there, on GitHub's free runners.
+pub const REPOSITORIES: [&str; 3] = [
+    "horizon-rust/horizon-android",
+    "horizon-rust/horizon",
+    "Sleepless-index/Horizon-Droid",
+];
 
 /// A repository's latest release, as GitHub's API serves it.
 pub fn latest_url(repository: &str) -> String {
