@@ -227,7 +227,7 @@ def main():
         gradle = candidates[0]
     environment['ANDROID_HOME'] = str(args.sdk)
     variant = 'release' if args.release_candidate else 'debug'
-    dev_properties = (['-PappId=dev.horizon.android.dev', '-PdevBuild=' + args.dev_build,
+    dev_properties = (['-PappId=dev.horizon.android.dev2', '-PdevBuild=' + args.dev_build,
                        '-PdevVersionCode=' + str(args.dev_version_code)] if args.dev_build else [])
     if args.dev_package:
         dev_properties.append('-PuseDevSuffix=true')
@@ -239,7 +239,7 @@ def main():
     run([*signer, 'verify', '--verbose', apk])
     if args.release_candidate:
         import sys
-        run([sys.executable, ROOT / 'tools/check_android_release.py', apk, '--aapt2', tools / ('aapt2' + suffix), *(['--public'] if args.public else []), *(['--app-id', 'dev.horizon.android.dev'] if args.dev_build else [])], cwd=ROOT)
+        run([sys.executable, ROOT / 'tools/check_android_release.py', apk, '--aapt2', tools / ('aapt2' + suffix), *(['--public'] if args.public else []), *(['--app-id', 'dev.horizon.android.dev2'] if args.dev_build else [])], cwd=ROOT)
     print(f'APK: {apk}', flush=True)
 
 

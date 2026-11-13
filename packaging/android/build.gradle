@@ -37,7 +37,9 @@ android {
     }
     buildTypes {
         debug {
-            signingConfig signingConfigs.development
+            // CI dev builds use the stable repository signing identity when it is
+            // available; local debug builds keep their local development key.
+            signingConfig hasReleaseKey ? signingConfigs.releaseKey : signingConfigs.development
             versionNameSuffix '-dev.' + providers.gradleProperty('devBuild').getOrElse('local')
             if (providers.gradleProperty('useDevSuffix').isPresent()) { applicationIdSuffix '.dev' }
         }

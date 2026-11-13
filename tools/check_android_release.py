@@ -107,7 +107,7 @@ def main():
     parser.add_argument('--aapt2', required=True, type=Path)
     parser.add_argument('--report', type=Path)
     parser.add_argument('--public', action='store_true')
-    parser.add_argument('--app-id', choices=['com.goydevv.horizon', 'com.goydevv.horizon.dev', 'dev.horizon.android', 'dev.horizon.android.dev'], default='com.goydevv.horizon')
+    parser.add_argument('--app-id', choices=['com.goydevv.horizon', 'com.goydevv.horizon.dev', 'dev.horizon.android', 'dev.horizon.android.dev', 'dev.horizon.android.dev2'], default='com.goydevv.horizon')
     args = parser.parse_args()
     report = audit(args.apk, args.aapt2, args.public, args.app_id)
     if args.report:

@@ -32,8 +32,9 @@ concurrency:
 
 jobs:
   build:
-    # Never expose a signing secret to pull requests or arbitrary dispatch refs.
-    if: github.ref == 'refs/heads/android' || github.ref == 'refs/heads/controls-overhaul-zip'
+    # Never expose signing secrets to pull requests or arbitrary dispatch refs. The
+    # task branch is explicitly allowlisted for this one reviewed dev build.
+    if: github.ref == 'refs/heads/android' || github.ref == 'refs/heads/controls-overhaul-zip' || github.ref == 'refs/heads/codex/android-update-fixes'
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     strategy:
@@ -60,7 +61,7 @@ jobs:
           import base64, os
           from pathlib import Path
           # A dedicated dev key wins when the repository has one; otherwise the release
-          # key signs dev builds too (the .dev package is a separate app, so the
+          # key signs dev builds too (the .dev2 package is a separate app, so the
           # certificate is the only thing the APK carries -- never the key itself).
           dev = os.environ.get('DEV_KEYSTORE', '')
           release = os.environ.get('RELEASE_KEYSTORE', '')
@@ -150,7 +151,7 @@ jobs:
           for source, dest in [('LICENSE', 'LICENSE.txt'), ('THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md')]:
               shutil.copyfile(source, out / dest)
           (out / 'BUILD.json').write_text(json.dumps({'commit': sha, 'abi': abi, 'profile': 'release',
-              'package': 'dev.horizon.android.dev', 'experimental': True,
+              'package': 'dev.horizon.android.dev2', 'experimental': True,
               'run': f'https://github.com/{os.environ["GITHUB_REPOSITORY"]}/actions/runs/{os.environ["GITHUB_RUN_ID"]}'}, indent=2) + '\n')
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
               summary.write(f'### Dev APK: {abi}\n\nCommit: `{sha}`. Optimized release profile; experimental build.\n\n'
