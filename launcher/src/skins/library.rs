@@ -140,6 +140,28 @@ impl Library {
         self.save(root)?;
         Ok(id)
     }
+    pub fn remove(&mut self, root: &Path, id: &str, kind: Kind) -> Result<(), String> {
+        let path = Self::image(root, id)?;
+        if !self.entries.iter().any(|e| e.id == id && e.kind == kind) {
+            return Err("That image is not in your gallery.".into());
+        }
+        let mut next = self.clone();
+        next.entries.retain(|e| !(e.id == id && e.kind == kind));
+        for selection in next.selections.values_mut() {
+            match kind {
+                Kind::Skin if selection.skin.as_deref() == Some(id) => selection.skin = None,
+                Kind::Cape if selection.cape.as_deref() == Some(id) => selection.cape = None,
+                _ => {}
+            }
+        }
+        next.save(root)?;
+        let shared = next.entries.iter().any(|e| e.id == id);
+        *self = next;
+        if !shared {
+            let _ = std::fs::remove_file(path);
+        }
+        Ok(())
+    }
     pub fn import_file(&mut self, root: &Path, path: &Path, kind: Kind) -> Result<String, String> {
         self.import(
             root,
@@ -256,6 +278,77 @@ mod tests {
             .prepare_game(&root, "offline:Player", &root.join("game"), None)
             .unwrap();
         assert!(root.join("game/horizon-appearance.json").is_file());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    fn png(color: [u8; 4]) -> Vec<u8> {
+        let mut out = std::io::Cursor::new(vec![]);
+        image::RgbaImage::from_pixel(64, 64, image::Rgba(color))
+            .write_to(&mut out, image::ImageFormat::Png)
+            .unwrap();
+        out.into_inner()
+    }
+
+    #[test]
+    fn removing_a_skin_clears_every_selection_of_it_and_deletes_only_its_own_file() {
+        let root = std::env::temp_dir().join(format!("horizon-wardrobe-rm-{}", std::process::id()));
+        let mut library = Library::default();
+        let red = library
+            .import(&root, "Red", Kind::Skin, &png([200, 20, 20, 255]))
+            .unwrap();
+        let blue = library
+            .import(&root, "Blue", Kind::Skin, &png([20, 20, 200, 255]))
+            .unwrap();
+        for key in ["offline:a", "msa:b"] {
+            library.select(&root, key, &red, Kind::Skin).unwrap();
+        }
+        library.select(&root, "offline:c", &blue, Kind::Skin).unwrap();
+        let red_file = Library::image(&root, &red).unwrap();
+        let blue_file = Library::image(&root, &blue).unwrap();
+        assert!(red_file.is_file() && blue_file.is_file());
+
+        assert!(library.remove(&root, &red, Kind::Cape).is_err());
+        assert!(library.remove(&root, "../escape", Kind::Skin).is_err());
+        assert!(library.remove(&root, &"0".repeat(64), Kind::Skin).is_err());
+        assert_eq!(library.entries.len(), 2);
+
+        library.remove(&root, &red, Kind::Skin).unwrap();
+        assert!(!red_file.exists());
+        assert!(blue_file.is_file());
+        let loaded = Library::load(&root).unwrap();
+        assert_eq!(loaded.entries.len(), 1);
+        assert_eq!(loaded.entries[0].id, blue);
+        assert_eq!(loaded.selections["offline:a"].skin, None);
+        assert_eq!(loaded.selections["msa:b"].skin, None);
+        assert_eq!(loaded.selections["offline:c"].skin.as_deref(), Some(&*blue));
+        assert!(library.remove(&root, &red, Kind::Skin).is_err());
+
+        let game = root.join("game");
+        loaded
+            .prepare_game(&root, "offline:a", &game, None)
+            .unwrap();
+        let handoff: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(game.join("horizon-appearance.json")).unwrap())
+                .unwrap();
+        assert!(handoff["skin"].is_null());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn removing_a_skin_keeps_a_cape_that_shares_its_identifier_untouched() {
+        let root = std::env::temp_dir().join(format!("horizon-wardrobe-sh-{}", std::process::id()));
+        let mut library = Library::default();
+        let bytes = png([9, 9, 9, 255]);
+        let id = library.import(&root, "Skin", Kind::Skin, &bytes).unwrap();
+        library.entries.push(Entry {
+            id: id.clone(),
+            title: "Cape".into(),
+            kind: Kind::Cape,
+        });
+        library.remove(&root, &id, Kind::Skin).unwrap();
+        assert!(Library::image(&root, &id).unwrap().is_file());
+        assert_eq!(library.entries.len(), 1);
+        assert_eq!(library.entries[0].kind, Kind::Cape);
         std::fs::remove_dir_all(root).unwrap();
     }
 }

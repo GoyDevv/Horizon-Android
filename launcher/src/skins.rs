@@ -7,6 +7,8 @@
 //! and leg are the right ones mirrored). Capes are 64×32 (or the older 22×17).
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+#[path = "skins/changer.rs"]
+pub mod changer;
 #[path = "skins/cloud.rs"]
 pub mod cloud;
 #[path = "skins/library.rs"]
