@@ -300,6 +300,10 @@ impl Game<'_> {
                 if let Some(renderer) = &mut self.renderer {
                     renderer.set_shader_pack(dimension, None, &[]);
                 }
+                self.system_message(Text::colored(
+                    format!("Shader pack {name} could not be loaded: {e}"),
+                    0xFF5555,
+                ));
             }
             Err(panic) => {
                 self.shader_pack_failed(name, dimension, &panic);
@@ -656,7 +660,9 @@ impl Game<'_> {
     /// Turns off the pack `name` after loading it panicked: nothing runs in its place, it is no
     /// longer the picked pack (so the next start does not load it again), and the chat says so.
     fn shader_pack_failed(&mut self, name: &str, dimension: i32, error: &str) {
-        log::error!("shader pack {name}: fallback for dimension {dimension} (kept enabled in settings): {error}");
+        log::error!(
+            "shader pack {name}: fallback for dimension {dimension} (kept enabled in settings): {error}"
+        );
         self.pack_ids = None;
         if let Some(renderer) = &mut self.renderer {
             // Marks this dimension as loaded, without a pack, so it does not loop-crash this dimension,
@@ -664,7 +670,7 @@ impl Game<'_> {
             renderer.set_shader_pack(dimension, None, &[]);
         }
         self.system_message(Text::colored(
-            format!("Shader pack {name} could not be loaded and was turned off"),
+            format!("Shader pack {name} failed to load: {error}"),
             0xFF5555,
         ));
     }

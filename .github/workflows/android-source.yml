@@ -19,7 +19,7 @@ on:
         description: ABI built when build_apk is enabled
         type: choice
         options: [arm64-v8a, armeabi-v7a, x86, x86_64]
-        default: arm64-v8a
+        default: armeabi-v7a
 permissions:
   contents: read
 concurrency:
@@ -147,6 +147,11 @@ jobs:
           mkdir dist
           cp ".local/android/apk/$ABI/horizon-android-public.apk" "dist/Horizon-Android-debug-$ABI.apk"
           (cd dist && sha256sum "Horizon-Android-debug-$ABI.apk" > SHA256SUMS.txt)
+          printf '%s\n' \
+            'Package: dev.horizon.android.dev (installs alongside the stable Horizon app).' \
+            'This APK is signed with the source workflow debug key. Android may reject an update over a dev APK signed by another run; the stable app is unaffected.' \
+            'Choose armeabi-v7a for 32-bit Android, including 64-bit phones running a 32-bit OS.' \
+            > dist/INSTALL.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: horizon-android-debug-${{ inputs.abi }}
