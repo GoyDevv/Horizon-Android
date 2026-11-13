@@ -4114,14 +4114,25 @@ impl Launcher {
                 self.catalog.update_ui_open = true;
             }
         }
+        if matches!(&status, crate::updater::UpdateStatus::Error(_)) {
+            self.catalog.update_ui_open = true;
+        }
 
         if !self.catalog.update_ui_open {
             return;
         }
 
-        let Some(info) = self.catalog.update_info.clone() else {
-            return;
-        };
+        let info = self.catalog.update_info.clone().unwrap_or_else(|| {
+            crate::updater::ReleaseInfo {
+                version: String::new(),
+                tag_name: String::new(),
+                title: "Update check failed".into(),
+                changelog: String::new(),
+                download_url: None,
+                asset_name: String::new(),
+                size_bytes: 0,
+            }
+        });
 
         // Material 3 Animation: smooth slide-up and fade-in
         self.catalog.update_anim_time = (self.catalog.update_anim_time + 0.06).min(1.0);
@@ -4144,7 +4155,7 @@ impl Launcher {
 
         // Center Material 3 Container Card
         let mw = (w - 32.0).clamp(320.0, 680.0);
-        let mh = (h - 28.0).clamp(340.0, 520.0);
+        let mh = (h - 20.0).clamp(280.0, 520.0);
         let mx = (w - mw) * 0.5;
         let my = (h - mh) * 0.5 + slide_y;
 
@@ -4187,7 +4198,11 @@ impl Launcher {
             my3_text(),
             "Horizon Android Update",
         );
-        let badge_text = format!("v1.0.0  →  v{}", info.version);
+        let badge_text = if info.version.is_empty() {
+            format!("v{}", crate::updater::CURRENT_VERSION)
+        } else {
+            format!("v{}  →  v{}", crate::updater::CURRENT_VERSION, info.version)
+        };
         let badge_w = ui.measure(Face::SemiBold, 11.0, &badge_text) + 16.0;
         let badge_r = [title_x, head_y + 24.0, badge_w, 20.0];
         ui.rounded(
@@ -4224,37 +4239,69 @@ impl Launcher {
             "What's New in this release:",
         );
 
-        let lines: Vec<&str> = info.changelog.lines().collect();
+        let changelog = if info.changelog.trim().is_empty() {
+            match &status {
+                crate::updater::UpdateStatus::Error(error) => error.as_str(),
+                _ => "This release did not include release notes.",
+            }
+        } else {
+            info.changelog.as_str()
+        };
+        let mut lines = Vec::new();
+        for raw in changelog.lines() {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() || trimmed.starts_with("```") {
+                lines.push((String::new(), false));
+                continue;
+            }
+            let heading = trimmed.starts_with('#');
+            let clean = if heading {
+                trimmed.trim_start_matches('#').trim()
+            } else if trimmed.starts_with(['-', '*']) {
+                trimmed.trim_start_matches(['-', '*', ' '])
+            } else {
+                trimmed
+            };
+            let text = if !heading && trimmed.starts_with(['-', '*']) {
+                format!("• {clean}")
+            } else {
+                clean.to_owned()
+            };
+            let size = if heading { 12.5 } else { 12.0 };
+            lines.extend(
+                wrap_text_lines_limited(ui, Face::Regular, size, &text, box_w - 32.0, 4096)
+                    .into_iter()
+                    .map(|line| (line, heading)),
+            );
+        }
+        if lines.is_empty() {
+            lines.push(("This release did not include release notes.".into(), false));
+        }
         let line_h = 18.0;
         let text_top = box_y + 34.0;
         let text_bottom = box_y + box_h - 10.0;
-        let mut cur_ty = text_top;
+        let max_scroll = (lines.len() as f32 * line_h - (text_bottom - text_top)).max(0.0);
+        self.catalog.update_scroll = self.catalog.update_scroll.clamp(0.0, max_scroll);
+        self.list_view = Some([text_top, text_bottom, max_scroll]);
         ui.set_clip(Some([
             mx + 28.0,
             text_top,
             box_w - 16.0,
             (text_bottom - text_top).max(1.0),
         ]));
-        for line in lines {
-            if cur_ty + line_h > text_bottom {
-                break;
+        for (index, (line, heading)) in lines.iter().enumerate() {
+            let y = text_top + index as f32 * line_h - self.catalog.update_scroll;
+            if y + line_h <= text_top || y >= text_bottom {
+                continue;
             }
-            let is_header = line.starts_with('#');
-            let is_bullet = line.starts_with('-') || line.starts_with('*');
-            let (draw_text, face, size, col) = if is_header {
-                (
-                    line.trim_start_matches('#').trim(),
-                    Face::SemiBold,
-                    13.0,
-                    my3_text(),
-                )
-            } else if is_bullet {
-                (line, Face::Regular, 12.0, my3_text())
-            } else {
-                (line, Face::Regular, 11.5, my3_muted())
-            };
-            ui.text(face, size, mx + 32.0, cur_ty, col, draw_text);
-            cur_ty += line_h;
+            ui.text(
+                if *heading { Face::SemiBold } else { Face::Regular },
+                if *heading { 12.5 } else { 12.0 },
+                mx + 32.0,
+                y,
+                if *heading { my3_text() } else { my3_muted() },
+                line,
+            );
         }
         ui.set_clip(None);
 
@@ -4342,6 +4389,16 @@ impl Launcher {
             ("Downloading...", Action::TriggerUpdateInstall, false)
         } else if is_downloaded {
             ("Install Now", Action::TriggerUpdateInstall, true)
+        } else if matches!(&status, crate::updater::UpdateStatus::Error(_)) {
+            (
+                if self.catalog.update_info.is_some() {
+                    "Try Again"
+                } else {
+                    "Check Again"
+                },
+                Action::TriggerUpdateInstall,
+                true,
+            )
         } else {
             ("Update & Install", Action::TriggerUpdateInstall, true)
         };
@@ -8242,6 +8299,7 @@ impl Launcher {
             Some(Action::OpenUpdateScreen) => {
                 self.catalog.update_ui_open = true;
                 self.catalog.update_anim_time = 0.0;
+                self.catalog.update_scroll = 0.0;
             }
             Some(Action::CloseUpdateScreen) => {
                 self.catalog.update_ui_open = false;
@@ -8254,14 +8312,25 @@ impl Launcher {
                         crate::updater::download_and_install_in_background(info, self.home.clone());
                     }
                     crate::updater::UpdateStatus::Downloaded { path, .. } => {
-                        crate::updater::trigger_install(&path);
+                        if let Err(error) = crate::updater::trigger_install(&path) {
+                            crate::updater::set_status(crate::updater::UpdateStatus::Error(error));
+                        }
                     }
                     crate::updater::UpdateStatus::Error(_) => {
                         if let Some(info) = self.catalog.update_info.clone() {
-                            crate::updater::download_and_install_in_background(
-                                info,
-                                self.home.clone(),
-                            );
+                            let downloaded = self.home.join("updates").join(&info.asset_name);
+                            if downloaded.is_file() {
+                                if let Err(error) = crate::updater::trigger_install(&downloaded) {
+                                    crate::updater::set_status(crate::updater::UpdateStatus::Error(error));
+                                }
+                            } else {
+                                crate::updater::download_and_install_in_background(
+                                    info,
+                                    self.home.clone(),
+                                );
+                            }
+                        } else {
+                            crate::updater::check_in_background();
                         }
                     }
                     _ => {}
@@ -8269,6 +8338,8 @@ impl Launcher {
             }
             Some(Action::CheckForUpdates) => {
                 self.catalog.status = "Checking for updates...".into();
+                self.catalog.update_info = None;
+                self.catalog.update_scroll = 0.0;
                 crate::updater::check_in_background();
             }
             Some(Action::FmCloseModal) => {
@@ -8500,6 +8571,16 @@ impl Launcher {
                                 chooser.scroll = (chooser.scroll + delta).max(0.0);
                             } else if let Some(modal) = &mut self.catalog.project_modal {
                                 modal.scroll = (modal.scroll + delta).max(0.0);
+                            } else if self.catalog.update_ui_open
+                                && self.list_view.is_some_and(|view| {
+                                    drag.origin_y() / density_f64 >= view[0] as f64
+                                        && drag.origin_y() / density_f64 <= view[1] as f64
+                                })
+                            {
+                                if let Some(view) = self.list_view {
+                                    self.catalog.update_scroll =
+                                        (self.catalog.update_scroll + delta).clamp(0.0, view[2]);
+                                }
                             } else if self
                                 .list_view
                                 .is_some_and(|view| drag.origin_y() / density_f64 >= view[0] as f64)
@@ -8575,6 +8656,17 @@ fn capitalize(s: &str) -> String {
 }
 
 fn wrap_text_lines(ui: &Ui, face: Face, size: f32, text: &str, max_w: f32) -> Vec<String> {
+    wrap_text_lines_limited(ui, face, size, text, max_w, 16)
+}
+
+fn wrap_text_lines_limited(
+    ui: &Ui,
+    face: Face,
+    size: f32,
+    text: &str,
+    max_w: f32,
+    max_lines: usize,
+) -> Vec<String> {
     let mut lines = Vec::new();
     for raw_line in text.lines() {
         let trimmed = raw_line.trim();
@@ -8597,14 +8689,14 @@ fn wrap_text_lines(ui: &Ui, face: Face, size: f32, text: &str, max_w: f32) -> Ve
                 lines.push(current);
                 current = word.to_owned();
             }
-            if lines.len() >= 16 {
+            if lines.len() >= max_lines {
                 break;
             }
         }
-        if !current.is_empty() && lines.len() < 16 {
+        if !current.is_empty() && lines.len() < max_lines {
             lines.push(current);
         }
-        if lines.len() >= 16 {
+        if lines.len() >= max_lines {
             break;
         }
     }

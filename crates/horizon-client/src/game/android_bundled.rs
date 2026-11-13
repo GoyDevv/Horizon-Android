@@ -493,7 +493,8 @@ fn ensure_dynamic_mods_loaded(game: &Game<'_>, force: bool) {
         }
     }
 
-    // Collect all .hnmod bundles across horizon-native-mods/ and horizon-mods/
+    // `.hnmod` is source for a separately compiled native game build. Reading
+    // its metadata here is not execution; retain the compatibility path for hmod.
     let mut hnmod_paths = Vec::new();
     for root in &roots {
         for sub in [
@@ -507,7 +508,7 @@ fn ensure_dynamic_mods_loaded(game: &Game<'_>, force: bool) {
             };
             for entry in rd.flatten() {
                 let p = entry.path();
-                if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("hnmod") || e.eq_ignore_ascii_case("hmod")) {
+                if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("hmod")) {
                     hnmod_paths.push((root.clone(), p));
                 }
             }

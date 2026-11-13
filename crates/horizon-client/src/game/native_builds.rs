@@ -627,10 +627,20 @@ fn compile(version: &str, shared: &Mutex<Shared>) -> Result<String, String> {
 }
 
 impl Game<'_> {
-    /// Disabled: `.hnmod` and `.jar` mods auto-compile in real time inside the Horizon Launcher
-    /// and execute live in-process via `android_bundled.rs`.
-    #[allow(dead_code)]
-    pub(super) fn offer_compile(&mut self) {}
+    /// Confirm before building native source bundles; source metadata alone does
+    /// not make the mod's code run in this game build.
+    pub(super) fn offer_compile(&mut self) {
+        if self.native_builds.stage.is_some() {
+            return;
+        }
+        if let Some(row) = self.settings.mods.installed.iter().find(|row| {
+            row.problem.as_deref() == Some(horizon_client::mod_list::NOT_BUILT)
+                && row.native.is_some()
+                && !self.settings.mods.disabled.contains(&row.id)
+        }) {
+            self.native_builds.stage = Some(Stage::Warn(row.id.clone()));
+        }
+    }
 
     /// Disabled: eliminates the "Native mods -> Choose a build... / Try again" row and dialog.
     #[allow(dead_code)]
@@ -689,10 +699,6 @@ impl Game<'_> {
 
     /// The activity's notice, once: a build it set aside (NativeMods.java), on the title screen.
     pub(super) fn poll_native_builds(&mut self) {
-        self.native_builds.stage = None;
-        if true {
-            return;
-        }
         if self.native_builds.stage == Some(Stage::Compiling) {
             self.native_builds.fishing.update(Instant::now());
             let [w, h] = self.touch_size();
@@ -737,7 +743,7 @@ impl Game<'_> {
     }
 
     pub(super) fn native_builds_shown(&self) -> bool {
-        false
+        self.native_builds.stage.is_some()
     }
 
     /// A card in the middle of the screen, the rest dimmed, as the update's.

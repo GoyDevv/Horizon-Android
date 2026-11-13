@@ -106,6 +106,7 @@ def main():
     parser.add_argument('--public', action='store_true', help='Distribution APK: generated tables only; original resources download from Mojang')
     parser.add_argument('--dev-build', help='Public, non-debuggable dev channel label (separate .dev package)')
     parser.add_argument('--dev-version-code', type=int, help='Monotonically increasing dev channel version code')
+    parser.add_argument('--dev-package', action='store_true', help='Installable debug APK under a separate .dev application ID')
     parser.add_argument('--profile', choices=['release', 'fast', 'dev'], help='Public/candidate builds default to release (ThinLTO); local builds default to optimized fast')
     parser.add_argument('--gradle', type=Path, help='Gradle 8.14 executable (otherwise discover the cached distribution)')
     parser.add_argument('--check', action='store_true', help='Only type-check the Android target')
@@ -119,6 +120,8 @@ def main():
             parser.error('--dev-build requires --dev-version-code in 1..2100000000')
     elif args.dev_version_code is not None:
         parser.error('--dev-version-code requires --dev-build')
+    if args.dev_package and (args.public or args.release_candidate):
+        parser.error('--dev-package is for local debug APKs; it cannot be combined with --public or --release-candidate')
     if args.profile is None:
         args.profile = 'release' if args.public or args.release_candidate else 'fast'
     if args.public:
@@ -226,6 +229,8 @@ def main():
     variant = 'release' if args.release_candidate else 'debug'
     dev_properties = (['-PappId=dev.horizon.android.dev', '-PdevBuild=' + args.dev_build,
                        '-PdevVersionCode=' + str(args.dev_version_code)] if args.dev_build else [])
+    if args.dev_package:
+        dev_properties.append('-PuseDevSuffix=true')
     run([gradle, '--no-daemon', '-p', ROOT / 'packaging/android', '-Pabi=' + args.abi, '-PminSdk=' + str(min_sdk), *dev_properties, 'assemble' + variant.title()], cwd=ROOT, env=environment)
     apk = output / ('horizon-android-public.apk' if args.public else 'horizon-android-release.apk' if args.release_candidate else 'horizon-android.apk')
     shutil.copyfile(ROOT / f'.local/android/gradle-build/outputs/apk/{variant}/HorizonAndroid-{variant}.apk', apk)

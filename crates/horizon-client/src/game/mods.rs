@@ -556,7 +556,7 @@ fn native_mods_detail(built: &str) -> Option<String> {
     (!list.is_empty()).then_some(list)
 }
 
-fn not_built(dir: &std::path::Path, built: &str, rows: &[mod_list::Installed]) -> Vec<mod_list::Installed> {
+fn not_built(dir: &std::path::Path, built: &str) -> Vec<mod_list::Installed> {
     let info: serde_json::Value = serde_json::from_str(built).unwrap_or_default();
     let in_build = |id: &str| {
         info["mods"]
@@ -574,8 +574,7 @@ fn not_built(dir: &std::path::Path, built: &str, rows: &[mod_list::Installed]) -
             continue;
         };
         let m = bundle.manifest;
-        let listed = rows.iter().chain(&out).any(|row| row.id == m.id);
-        if !listed && !in_build(&m.id) {
+        if !in_build(&m.id) && !out.iter().any(|row| row.id == m.id) {
             out.push(mod_list::Installed {
                 title: format!("{} {}", m.id, m.version),
                 id: m.id,
@@ -583,7 +582,7 @@ fn not_built(dir: &std::path::Path, built: &str, rows: &[mod_list::Installed]) -
                 problem: Some(mod_list::NOT_BUILT.to_owned()),
                 dev: false,
                 has_settings: false,
-                native: None,
+                native: Some(mod_list::NativePage::default()),
             });
         }
     }
@@ -705,13 +704,16 @@ impl Game<'_> {
                             return mod_list::Installed {
                                 id: dyn_mod.id.clone(),
                                 title: dyn_mod.title.clone(),
-                                description: dyn_mod.description.clone(),
-                                problem: None,
+                                description: format!(
+                                    "{} This source mod is not running in this build. Compile it to create a game build that includes it.",
+                                    dyn_mod.description
+                                ),
+                                problem: Some(mod_list::NOT_BUILT.to_owned()),
                                 dev: false,
                                 has_settings: false,
                                 native: Some(mod_list::NativePage {
-                                    keys: dyn_mod.keys,
-                                    buttons: dyn_mod.custom_buttons,
+                                    keys: Vec::new(),
+                                    buttons: Vec::new(),
                                 }),
                             };
                         }
@@ -780,8 +782,24 @@ impl Game<'_> {
                     .any(|m| m.native.is_some()),
         );
         let native_dir = Self::game_dir().join(mod_list::NATIVE_DIR);
-        let unbuilt = not_built(&native_dir, &built, &self.settings.mods.installed);
-        self.settings.mods.installed.extend(unbuilt);
+        let unbuilt = not_built(&native_dir, &built);
+        for source in unbuilt {
+            if let Some(existing) = self
+                .settings
+                .mods
+                .installed
+                .iter_mut()
+                .find(|row| row.id == source.id)
+            {
+                existing.problem = source.problem;
+                existing.description =
+                    "Native source mod; compile it to run in this game build.".into();
+                existing.native = source.native;
+                existing.has_settings = false;
+            } else {
+                self.settings.mods.installed.push(source);
+            }
+        }
         #[cfg(target_os = "android")]
         self.list_native_builds_row();
     }
