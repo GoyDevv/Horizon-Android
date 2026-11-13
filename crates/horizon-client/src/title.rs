@@ -647,6 +647,19 @@ fn rolls_user_splash(text: &str, seed: u64, date: (u32, u32)) -> bool {
         .is_ok_and(|size| size > 0 && LegacyRandom::new(seed as i64).next_int_bound(size) == Ok(42))
 }
 
+#[cfg(target_os = "android")]
+fn version_label() -> String {
+    format!(
+        "Horizon {} (Rust) · Android v1.0.1",
+        horizon_core::VANILLA_VERSION
+    )
+}
+
+#[cfg(not(target_os = "android"))]
+fn version_label() -> String {
+    format!("Horizon {} (Rust)", horizon_core::VANILLA_VERSION)
+}
+
 impl Title {
     /// Names the player for the `<NAME> IS YOU` splash; `name` is only asked for when that splash was rolled.
     pub fn with_user(mut self, name: impl FnOnce() -> String) -> Self {
@@ -2328,13 +2341,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                         ];
                     }
                 }
-                #[cfg(target_os = "android")]
-                let version = format!(
-                    "Horizon {} (Rust) · Android v1.0.1",
-                    horizon_core::VANILLA_VERSION
-                );
-                #[cfg(not(target_os = "android"))]
-                let version = format!("Horizon {} (Rust)", horizon_core::VANILLA_VERSION);
+                let version = version_label();
                 batch.text(atlas, &version, 2.0, h - 10.0, u32::MAX, true);
                 // A nightly names its build in the top-left corner, the one spot no button reaches at any GUI
                 // scale, so screenshots and reports say which build they come from.
