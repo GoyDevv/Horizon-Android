@@ -180,15 +180,49 @@ impl Game<'_> {
         }
     }
     pub(super) fn draw_options(&mut self, batch: &mut HudBatch) {
-        #[cfg(target_os = "android")]
-        self.poll_native_builds();
+        self.poll_native_builds_if_android();
         self.watch_pack_folder();
         let mut ui = std::mem::take(&mut self.ui.options);
         ui.draw(&self.settings, batch, &self.gui.atlas, self.cursor);
         self.ui.options = ui;
         self.show_calibration(batch.height);
-        #[cfg(target_os = "android")]
+        self.draw_native_builds_if_android(batch);
+    }
+
+    #[cfg(target_os = "android")]
+    fn poll_native_builds_if_android(&mut self) {
+        self.poll_native_builds();
+    }
+
+    #[cfg(not(target_os = "android"))]
+    fn poll_native_builds_if_android(&mut self) {}
+
+    #[cfg(target_os = "android")]
+    fn draw_native_builds_if_android(&mut self, batch: &mut HudBatch) {
         self.draw_native_builds(batch);
+    }
+
+    #[cfg(not(target_os = "android"))]
+    fn draw_native_builds_if_android(&mut self, _batch: &mut HudBatch) {}
+
+    #[cfg(target_os = "android")]
+    fn native_builds_took_click(&mut self, pressed: bool, right: bool) -> bool {
+        if !self.native_builds_shown() {
+            return false;
+        }
+        if !pressed && !right {
+            let [w, h] = self.touch_size();
+            let d = (w as f32 / 1040.0).min(h as f32 / 700.0).clamp(1.0, 4.0);
+            let b = HudBatch::new([w, h]);
+            let at = [self.cursor.0 * b.scale / d, self.cursor.1 * b.scale / d];
+            self.native_builds_press(at);
+        }
+        true
+    }
+
+    #[cfg(not(target_os = "android"))]
+    fn native_builds_took_click(&mut self, _pressed: bool, _right: bool) -> bool {
+        false
     }
     /// HDR calibration's test picture to the renderer, full screen while it runs: the
     /// window goes fullscreen for it and back after, if it wasn't already.
@@ -226,15 +260,7 @@ impl Game<'_> {
         }
     }
     pub(super) fn options_mouse(&mut self, pressed: bool, right: bool) -> Result<()> {
-        #[cfg(target_os = "android")]
-        if self.native_builds_shown() {
-            if !pressed && !right {
-                let [w, h] = self.touch_size();
-                let d = (w as f32 / 1040.0).min(h as f32 / 700.0).clamp(1.0, 4.0);
-                let b = HudBatch::new([w, h]);
-                let at = [self.cursor.0 * b.scale / d, self.cursor.1 * b.scale / d];
-                self.native_builds_press(at);
-            }
+        if self.native_builds_took_click(pressed, right) {
             return Ok(());
         }
         if !pressed {
