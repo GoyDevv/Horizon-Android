@@ -997,7 +997,7 @@ class LauncherOverhaulTests(unittest.TestCase):
         # 6. jar_transpiler enable_mod_in_profile and treefall
         jt_src = _read_repo_file("crates/horizon-client/src/jar_transpiler.rs")
         self.assertIn('format!("mod.{clean_id}:true")', jt_src)
-        self.assertIn('combined.contains("treefall")', jt_src)
+        self.assertIn('named.contains("treefall")', jt_src)
 
         # 7. android_bundled scans mods/ folder
         ab_src = _read_repo_file("crates/horizon-client/src/game/android_bundled.rs")

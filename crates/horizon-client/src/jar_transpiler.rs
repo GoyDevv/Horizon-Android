@@ -25,7 +25,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 const MAX_ZIP_ENTRIES: usize = 4096;
 const MAX_ENTRY_BYTES: u64 = 8 * 1024 * 1024;
 pub const DEFAULT_HORIZON_REV: &str = "8933e8c2d81bef1549a63dc1c8341ca46fe3cffa";
-pub const DEFAULT_MIXINS_REV: &str = "1e758beab4f00b7ab82183f5b4a7ec4f42599a98";
+pub const DEFAULT_MIXINS_REV: &str = "e59da9094f0c2fdda6c627fe9eff22dec6a906f0";
 
 /// The compiled metadata and the generated runtime source of a transpiled bundle, as paths under
 /// the mod's own `mixins/<id>/`: `horizon_mods::index::native::allowed` takes a `.json` only under
