@@ -26,5 +26,5 @@ a phone.
 
 `native-mods/mod_menu` is the MIT-licensed Mod Menu port by tariksabanuz (github.com/tariksabanuz/ModMenuHorizon, v0.3.0). It adds a Mods
 button to the title screen and a Mods screen. It is a native mod, so it only appears in a build that contains it:
-run the workflow with the mod id `mod_menu`. Its newer releases hook functions this fork does not have, so this is the
-last version that applies to it.
+run the workflow with the mod id `mod_menu`. The 0.3.5 release does not apply to this fork: it hooks a draw function with a parameter this fork
+does not have, and a DirectX shader function it does not have. 0.3.0 is the version tested here.
