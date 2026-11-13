@@ -43,6 +43,16 @@ pub fn runs(image: &RgbaImage) -> Vec<Run> {
     out
 }
 
+pub fn thumbnail(skin: &RgbaImage, model: Model) -> Runs {
+    Arc::new(runs(&preview::render(
+        skin,
+        None,
+        model,
+        THUMB_CAMERA,
+        THUMB,
+    )))
+}
+
 pub fn columns(width: f32, tile_w: f32, gap: f32) -> usize {
     if !(width.is_finite() && tile_w > 0.0) {
         return 1;
@@ -87,8 +97,8 @@ pub fn tile_at(
         (x / (tile[0] + gap)).floor() as usize,
         (y / (tile[1] + gap)).floor() as usize,
     );
-    let inside = x - column as f32 * (tile[0] + gap) < tile[0]
-        && y - row as f32 * (tile[1] + gap) < tile[1];
+    let inside =
+        x - column as f32 * (tile[0] + gap) < tile[0] && y - row as f32 * (tile[1] + gap) < tile[1];
     let index = row * columns + column;
     (column < columns && inside && index < count).then_some(index)
 }
@@ -253,8 +263,7 @@ impl Changer {
         if let Some(found) = self.thumbs.get(&(id.clone(), slim)) {
             return found.clone();
         }
-        let image = preview::render(&self.skin_image(index), None, model, THUMB_CAMERA, THUMB);
-        let value = Arc::new(runs(&image));
+        let value = thumbnail(&self.skin_image(index), model);
         self.thumbs.insert((id, slim), value.clone());
         value
     }
@@ -308,7 +317,8 @@ mod tests {
     }
 
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("horizon-changer-{name}-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("horizon-changer-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
     }
@@ -360,10 +370,7 @@ mod tests {
         changer.apply().unwrap();
         assert_eq!(changer.active(), 2);
         let expected = Library::image(&root, &ids[1]).unwrap();
-        assert_eq!(
-            handoff(&changer)["skin"].as_str(),
-            expected.to_str(),
-        );
+        assert_eq!(handoff(&changer)["skin"].as_str(), expected.to_str(),);
         let reopened = Changer::new(&root, "offline:me", None).unwrap();
         assert_eq!(reopened.active(), 2);
         assert_eq!(reopened.selected, 2);
@@ -406,7 +413,10 @@ mod tests {
         assert!(!red.is_empty() && !blue.is_empty());
         assert_ne!(color(&red), color(&blue));
         assert!(Arc::ptr_eq(&red, &changer.thumb(1)));
-        assert!(red.iter().all(|(r, _)| r[0] >= 0.0 && r[0] + r[2] <= THUMB[0] as f32));
+        assert!(
+            red.iter()
+                .all(|(r, _)| r[0] >= 0.0 && r[0] + r[2] <= THUMB[0] as f32)
+        );
 
         changer.select_tile(1);
         let front = changer.stage();
@@ -447,7 +457,10 @@ mod tests {
         assert_eq!(columns(162.0, 50.0, 6.0), 3);
         assert_eq!(columns(161.5, 50.0, 6.0), 2);
         assert_eq!(columns(f32::NAN, 50.0, 6.0), 1);
-        assert_eq!(tile_rect(4, 3, tile, gap, origin, 0.0), [66.0, 96.0, 50.0, 70.0]);
+        assert_eq!(
+            tile_rect(4, 3, tile, gap, origin, 0.0),
+            [66.0, 96.0, 50.0, 70.0]
+        );
         assert_eq!(tile_rect(4, 3, tile, gap, origin, 30.0)[1], 66.0);
 
         let at = |p: [f32; 2], count, scroll| tile_at(p, count, 3, tile, gap, origin, scroll);

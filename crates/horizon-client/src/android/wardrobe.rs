@@ -6,8 +6,8 @@ use super::{
 use crate::{
     account::{Accounts, Provider},
     skins::{
-        self, Model, cloud,
-        library::{Kind, Library},
+        self, Model, changer, cloud,
+        library::{Entry, Kind, Library},
         preview,
     },
 };
@@ -37,6 +37,7 @@ pub(super) struct Wardrobe {
     pub view: [f32; 3],
     worker: Option<mpsc::Receiver<(String, Result<(cloud::Cache, bool), String>)>>,
     bitmap: Vec<([f32; 4], u32)>,
+    thumbs: std::collections::HashMap<(String, bool), changer::Runs>,
     rect: [f32; 4],
     fingers: std::collections::BTreeMap<u64, [f32; 2]>,
     note: String,
@@ -68,6 +69,7 @@ impl Wardrobe {
             cache: Default::default(),
             worker: None,
             bitmap: vec![],
+            thumbs: Default::default(),
             rect: [0.0; 4],
             view: [0.0; 3],
             fingers: Default::default(),
@@ -183,6 +185,36 @@ impl Wardrobe {
             self.selection_changed_at = Some(std::time::Instant::now());
             self.preview();
         }
+    }
+    pub fn remove(&mut self, index: usize) {
+        if self.damaged || crate::documents::busy() {
+            return;
+        }
+        if let Some(entry) = self.library.entries.get(index).cloned() {
+            self.note = match self.library.remove(&self.root, &entry.id, entry.kind) {
+                Ok(()) => format!("Removed \"{}\" from your gallery.", entry.title),
+                Err(error) => error,
+            };
+            self.thumbs.retain(|(id, _), _| *id != entry.id);
+            self.selection_changed_at = Some(std::time::Instant::now());
+            self.preview();
+        }
+    }
+    fn thumb(&mut self, id: &str) -> Option<changer::Runs> {
+        let slim = self
+            .library
+            .selections
+            .get(&self.key)
+            .is_some_and(|s| s.model == Model::Slim);
+        if let Some(found) = self.thumbs.get(&(id.to_owned(), slim)) {
+            return Some(found.clone());
+        }
+        let path = Library::image(&self.root, id).ok()?;
+        let skin = skins::read_skin(&skins::read_file(&path).ok()?).ok()?;
+        let model = if slim { Model::Slim } else { Model::Classic };
+        let runs = changer::thumbnail(&skin, model);
+        self.thumbs.insert((id.to_owned(), slim), runs.clone());
+        Some(runs)
     }
     pub fn import(&mut self) {
         if self.damaged {
@@ -507,8 +539,13 @@ impl Wardrobe {
         use horizon_client::ui_theme::{Icon, active_theme, motion};
         let theme = active_theme();
         let now = std::time::Instant::now();
-        let tab_t = motion::spring_expressive_default(motion::progress(self.tab_changed_at, now, 0.24));
-        let sel_t = motion::spring_expressive_spatial(motion::progress(self.selection_changed_at, now, 0.26));
+        let tab_t =
+            motion::spring_expressive_default(motion::progress(self.tab_changed_at, now, 0.24));
+        let sel_t = motion::spring_expressive_spatial(motion::progress(
+            self.selection_changed_at,
+            now,
+            0.26,
+        ));
         let slide_y = (1.0 - tab_t) * 8.0;
 
         let h = ui.h;
@@ -850,8 +887,10 @@ impl Wardrobe {
                                  title: &str,
                                  badge: &str,
                                  is_selected: bool,
-                                 action: Action| {
+                                 action: Action,
+                                 remove: Option<Action>| {
             let r = [lx, ry, lw, card_h];
+            targets.push((r, action));
             ui.rounded(
                 r[0],
                 r[1],
@@ -902,7 +941,7 @@ impl Wardrobe {
                     theme.text_muted,
                 );
             }
-            let max_tw = (lw - 132.0).max(60.0);
+            let max_tw = (lw - 132.0 - if remove.is_some() { 72.0 } else { 0.0 }).max(60.0);
             let t_fit = ui.fit_text(Face::SemiBold, 12.0, title, max_tw);
             ui.text(
                 Face::SemiBold,
@@ -951,7 +990,12 @@ impl Wardrobe {
                 },
                 pill_txt,
             );
-            targets.push((r, action));
+            if let Some(remove) = remove {
+                let rr = [pr[0] - 72.0, pr[1], 66.0, 26.0];
+                ui.rounded(rr[0], rr[1], rr[2], rr[3], 8.0, theme.surface_dim);
+                ui.centered_fit(Face::SemiBold, 10.5, rr, theme.danger, "Remove");
+                targets.push((rr, remove));
+            }
         };
 
         let mut shown_items = 0usize;
@@ -974,40 +1018,131 @@ impl Wardrobe {
                         },
                         is_active,
                         Action::WardrobeActivateCape(index),
+                        None,
                     );
                 }
                 row += card_step;
             }
         }
 
-        // Local Gallery Items (Skins or Capes)
-        for (index, entry) in self
+        let local: Vec<(usize, Entry)> = self
             .library
             .entries
             .iter()
+            .cloned()
             .enumerate()
             .filter(|(_, e)| e.kind == self.kind())
-        {
-            shown_items += 1;
-            if row >= list_start - 4.0 && row + card_h <= bottom + 4.0 {
+            .collect();
+        if self.capes {
+            for (index, entry) in &local {
+                shown_items += 1;
+                if row >= list_start - 4.0 && row + card_h <= bottom + 4.0 {
+                    let is_sel = selected_id == Some(entry.id.as_str());
+                    draw_gallery_item(
+                        ui,
+                        targets,
+                        row,
+                        &entry.title,
+                        if is_sel {
+                            "Local Gallery · Currently applied"
+                        } else {
+                            "Local Cape PNG · Tap to equip"
+                        },
+                        is_sel,
+                        Action::WardrobeSelect(*index),
+                        Some(Action::WardrobeRemove(*index)),
+                    );
+                }
+                row += card_step;
+            }
+        } else if !local.is_empty() {
+            let gap = 8.0;
+            let columns = changer::columns(lw, 112.0, gap);
+            let tile_w = (lw - gap * (columns as f32 - 1.0)) / columns as f32;
+            let tile_h = 176.0;
+            shown_items += local.len();
+            for (n, (index, entry)) in local.iter().enumerate() {
+                let r =
+                    changer::tile_rect(n, columns, [tile_w, tile_h], gap, [lx, list_start], scroll);
+                if r[1] < list_start - 4.0 || r[1] + tile_h > bottom + 4.0 {
+                    continue;
+                }
                 let is_sel = selected_id == Some(entry.id.as_str());
-                draw_gallery_item(
+                ui.rounded(
+                    r[0],
+                    r[1],
+                    r[2],
+                    r[3],
+                    12.0,
+                    if is_sel {
+                        theme.surface_selected
+                    } else {
+                        theme.surface
+                    },
+                );
+                ui.stroke_rounded(
+                    r[0],
+                    r[1],
+                    r[2],
+                    r[3],
+                    12.0,
+                    if is_sel { 1.6 } else { 1.0 },
+                    if is_sel { theme.accent } else { theme.border },
+                );
+                targets.push((r, Action::WardrobeSelect(*index)));
+                let stage = [r[0] + 6.0, r[1] + 6.0, r[2] - 12.0, 104.0];
+                ui.rounded(
+                    stage[0],
+                    stage[1],
+                    stage[2],
+                    stage[3],
+                    8.0,
+                    theme.surface_dim,
+                );
+                if let Some(runs) = self.thumb(&entry.id) {
+                    let s = (stage[2] / 64.0).min(stage[3] / 96.0);
+                    let ox = stage[0] + (stage[2] - 64.0 * s) * 0.5;
+                    let oy = stage[1] + (stage[3] - 96.0 * s) * 0.5;
+                    for ([bx, by, bw, bh], c) in runs.iter() {
+                        ui.rounded(
+                            ox + bx * s,
+                            oy + by * s,
+                            bw * s,
+                            bh * s,
+                            0.0,
+                            rgba(c[0], c[1], c[2], c[3]),
+                        );
+                    }
+                }
+                let title = ui.fit_text(Face::SemiBold, 11.0, &entry.title, r[2] - 16.0);
+                ui.text(
+                    Face::SemiBold,
+                    11.0,
+                    r[0] + 8.0,
+                    r[1] + 114.0,
+                    theme.text_primary,
+                    &title,
+                );
+                let half = (r[2] - 18.0) * 0.5;
+                let buttons_y = r[1] + r[3] - 34.0;
+                button(
                     ui,
                     targets,
-                    row,
-                    &entry.title,
-                    if is_sel {
-                        "Local Gallery · Currently applied"
-                    } else if self.capes {
-                        "Local Cape PNG · Tap to equip"
-                    } else {
-                        "Local Skin PNG · Tap to equip"
-                    },
+                    [r[0] + 6.0, buttons_y, half, 28.0],
+                    if is_sel { "Active" } else { "Apply" },
+                    Action::WardrobeSelect(*index),
                     is_sel,
-                    Action::WardrobeSelect(index),
+                );
+                button(
+                    ui,
+                    targets,
+                    [r[0] + 12.0 + half, buttons_y, half, 28.0],
+                    "Remove",
+                    Action::WardrobeRemove(*index),
+                    false,
                 );
             }
-            row += card_step;
+            row = list_start - scroll + local.len().div_ceil(columns) as f32 * (tile_h + gap);
         }
 
         // Empty State Card when gallery has no items for this tab

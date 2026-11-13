@@ -311,6 +311,7 @@ pub(super) enum Action {
     SelectOffline,
     WardrobeKind(bool),
     WardrobeSelect(usize),
+    WardrobeRemove(usize),
     WardrobeImport,
     WardrobeCloud,
     WardrobeUpload,
@@ -7511,6 +7512,7 @@ impl Launcher {
                 self.catalog.scroll = 0.0;
             }
             Some(Action::WardrobeSelect(index)) => self.wardrobe.select(index),
+            Some(Action::WardrobeRemove(index)) => self.wardrobe.remove(index),
             Some(Action::WardrobeImport) => self.wardrobe.import(),
             Some(Action::WardrobeCloud) => self
                 .wardrobe

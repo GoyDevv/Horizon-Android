@@ -302,7 +302,9 @@ mod tests {
         for key in ["offline:a", "msa:b"] {
             library.select(&root, key, &red, Kind::Skin).unwrap();
         }
-        library.select(&root, "offline:c", &blue, Kind::Skin).unwrap();
+        library
+            .select(&root, "offline:c", &blue, Kind::Skin)
+            .unwrap();
         let red_file = Library::image(&root, &red).unwrap();
         let blue_file = Library::image(&root, &blue).unwrap();
         assert!(red_file.is_file() && blue_file.is_file());
