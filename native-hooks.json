@@ -6340,6 +6340,7 @@
     },
     {
       "name": "anvil_update",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_anvil_update",
       "neoforge": "AnvilUpdateEvent",
       "side": "both",
@@ -6351,6 +6352,7 @@
     },
     {
       "name": "block_clone_item",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_block_clone_item",
       "mod_api": {
         "contract": "replace",
@@ -6359,6 +6361,7 @@
     },
     {
       "name": "block_entity_accepts_fluid",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_block_entity_accepts_fluid",
       "neoforge": "IFluidHandler.isFluidValid",
       "side": "server",
@@ -6370,6 +6373,7 @@
     },
     {
       "name": "block_grow",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::GameLevel<'_>::native_block_grow",
       "side": "server",
       "cancellable": true,
@@ -6380,6 +6384,7 @@
     },
     {
       "name": "block_place",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_block_place",
       "neoforge": "BlockEvent.EntityPlaceEvent (Bukkit's BlockPlaceEvent)",
       "side": "server",
@@ -6391,6 +6396,7 @@
     },
     {
       "name": "block_redstone",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::GameLevel<'_>::native_block_redstone",
       "neoforge": "none (NeoForge has no such event; Bukkit's BlockRedstoneEvent)",
       "side": "server",
@@ -6400,6 +6406,7 @@
     },
     {
       "name": "break_speed",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_break_speed",
       "neoforge": "PlayerEvent.BreakSpeed",
       "side": "both",
@@ -6410,6 +6417,7 @@
     },
     {
       "name": "can_build",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_can_build",
       "side": "server",
       "cancellable": true,
@@ -6420,6 +6428,7 @@
     },
     {
       "name": "chat_decorate",
+      "version": 1,
       "target": "horizon_client::lan::hub::chat::native_chat_decorate",
       "neoforge": "net.neoforged.neoforge.event.ServerChatEvent (setMessage, the shown component)",
       "side": "server",
@@ -6430,6 +6439,7 @@
     },
     {
       "name": "chat_suggestion_applied",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_chat_suggestion_applied",
       "side": "client",
       "cancellable": false,
@@ -6439,6 +6449,7 @@
     },
     {
       "name": "chunk_generate",
+      "version": 1,
       "target": "horizon_world::worldgen::native_generate::native_chunk_generate",
       "neoforge": "none (NeoForge has no such event, a mod registers its own ChunkGenerator; Bukkit's ChunkGenerator.generateNoise)",
       "side": "server",
@@ -6448,6 +6459,7 @@
     },
     {
       "name": "client_attack",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_client_attack",
       "neoforge": "AttackEntityEvent",
       "side": "client",
@@ -6458,6 +6470,7 @@
     },
     {
       "name": "client_hurt",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_client_hurt",
       "side": "client",
       "cancellable": false,
@@ -6467,6 +6480,7 @@
     },
     {
       "name": "client_player_network_logging_in",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_client_player_network_logging_in",
       "neoforge": "ClientPlayerNetworkEvent.LoggingIn",
       "side": "client",
@@ -6477,6 +6491,7 @@
     },
     {
       "name": "client_tick_pre",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_client_tick_pre",
       "neoforge": "ClientTickEvent.Pre",
       "side": "client",
@@ -6487,6 +6502,7 @@
     },
     {
       "name": "client_tick_post",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_client_tick_post",
       "neoforge": "ClientTickEvent.Post",
       "side": "client",
@@ -6497,6 +6513,7 @@
     },
     {
       "name": "console_line",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_console_line",
       "neoforge": "none (Bukkit's ServerCommandEvent and RemoteServerCommandEvent; NeoForge's CommandEvent hears parsed commands only)",
       "side": "server",
@@ -6508,6 +6525,7 @@
     },
     {
       "name": "container_accepts",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_container_accepts",
       "neoforge": "IItemHandler.isItemValid (Capabilities.Item.BLOCK)",
       "side": "server",
@@ -6519,6 +6537,7 @@
     },
     {
       "name": "creative_slot_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_creative_slot_v2",
       "side": "server",
       "cancellable": true,
@@ -6529,6 +6548,7 @@
     },
     {
       "name": "custom_block_fluids",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_custom_block_fluids",
       "mod_api": {
         "contract": "listen"
@@ -6536,6 +6556,7 @@
     },
     {
       "name": "custom_fluid_tanks",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_custom_fluid_tanks",
       "mod_api": {
         "contract": "replace",
@@ -6544,6 +6565,7 @@
     },
     {
       "name": "custom_fluid_fill",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_custom_fluid_fill",
       "mod_api": {
         "contract": "replace",
@@ -6552,6 +6574,7 @@
     },
     {
       "name": "custom_fluid_drain",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_custom_fluid_drain",
       "mod_api": {
         "contract": "replace",
@@ -6560,6 +6583,7 @@
     },
     {
       "name": "custom_payload_from_client",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_custom_payload_from_client",
       "neoforge": "none (NeoForge registers payload handlers per type; Bukkit's PluginMessageListener)",
       "side": "server",
@@ -6569,6 +6593,7 @@
     },
     {
       "name": "entity_change_block_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_entity_change_block_v2",
       "neoforge": "none (NeoForge has no such event; Bukkit's EntityChangeBlockEvent is cancellable)",
       "side": "server",
@@ -6580,6 +6605,7 @@
     },
     {
       "name": "entity_change_block_v3",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_entity_change_block_v3",
       "neoforge": "none (NeoForge has no such event; Bukkit's EntityChangeBlockEvent is cancellable)",
       "side": "server",
@@ -6591,6 +6617,7 @@
     },
     {
       "name": "entity_data_to",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_entity_data_to",
       "neoforge": "none (NeoForge has no per-viewer entity data event; ProtocolLib's ENTITY_METADATA listener)",
       "side": "server",
@@ -6600,6 +6627,7 @@
     },
     {
       "name": "entity_interact_specific",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_entity_interact_specific",
       "neoforge": "PlayerInteractEvent.EntityInteractSpecific",
       "side": "server",
@@ -6611,6 +6639,7 @@
     },
     {
       "name": "entity_outline",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_entity_outline",
       "side": "client",
       "mod_api": {
@@ -6619,6 +6648,7 @@
     },
     {
       "name": "fishing_hook_landed",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_fishing_hook_landed",
       "neoforge": "none (NeoForge's ProjectileImpactEvent leaves the bobber's block contact out; Bukkit's ProjectileHitEvent for a FishHook)",
       "side": "server",
@@ -6628,6 +6658,7 @@
     },
     {
       "name": "fishing_medium",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_fishing_medium",
       "neoforge": "none (FishingHook only fishes in water; lava-fishing mods replace the hook entity)",
       "side": "both",
@@ -6638,6 +6669,7 @@
     },
     {
       "name": "handshake",
+      "version": 1,
       "target": "horizon_client::lan::conn::native_handshake",
       "neoforge": "none (NeoForge has no handshake event; Paper's PlayerHandshakeEvent)",
       "side": "server",
@@ -6649,6 +6681,7 @@
     },
     {
       "name": "hanging_break_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_hanging_break_v2",
       "side": "server",
       "cancellable": true,
@@ -6659,6 +6692,7 @@
     },
     {
       "name": "interact_entity_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_interact_entity_v2",
       "neoforge": "PlayerInteractEvent.EntityInteract (getHand)",
       "side": "server",
@@ -6670,6 +6704,7 @@
     },
     {
       "name": "inventory_changed",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_inventory_changed",
       "neoforge": "none (NeoForge has no inventory-change event; Bukkit's InventoryClickEvent is the nearest)",
       "side": "server",
@@ -6679,6 +6714,7 @@
     },
     {
       "name": "inventory_click",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_inventory_click",
       "neoforge": "none (Bukkit's InventoryClickEvent)",
       "side": "server",
@@ -6690,6 +6726,7 @@
     },
     {
       "name": "inventory_drag",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_inventory_drag",
       "neoforge": "none (Bukkit's InventoryDragEvent)",
       "side": "server",
@@ -6701,6 +6738,7 @@
     },
     {
       "name": "item_after_vertical_collision",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_item_after_vertical_collision",
       "side": "both",
       "cancellable": true,
@@ -6711,6 +6749,7 @@
     },
     {
       "name": "item_dropped_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_item_dropped_v2",
       "neoforge": "ItemTossEvent",
       "side": "server",
@@ -6722,6 +6761,7 @@
     },
     {
       "name": "item_interact_mob",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_item_interact_mob",
       "side": "server",
       "mod_api": {
@@ -6731,6 +6771,7 @@
     },
     {
       "name": "item_picked_up_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_item_picked_up_v2",
       "neoforge": "ItemEntityPickupEvent.Pre",
       "side": "server",
@@ -6742,6 +6783,7 @@
     },
     {
       "name": "living_change_target",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_living_change_target",
       "neoforge": "LivingChangeTargetEvent",
       "side": "server",
@@ -6753,6 +6795,7 @@
     },
     {
       "name": "living_damage_pre",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_living_damage_pre",
       "neoforge": "LivingDamageEvent.Pre",
       "side": "server",
@@ -6763,6 +6806,7 @@
     },
     {
       "name": "living_damage_post",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_living_damage_post",
       "neoforge": "LivingDamageEvent.Post",
       "side": "server",
@@ -6773,6 +6817,7 @@
     },
     {
       "name": "living_experience_drop",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_living_experience_drop",
       "neoforge": "LivingExperienceDropEvent",
       "side": "server",
@@ -6783,6 +6828,7 @@
     },
     {
       "name": "living_incoming_damage_v3",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_living_incoming_damage_v3",
       "neoforge": "LivingIncomingDamageEvent",
       "side": "server",
@@ -6794,6 +6840,7 @@
     },
     {
       "name": "lod_column",
+      "version": 1,
       "target": "horizon_world::worldgen::native_generate::native_lod_column",
       "neoforge": "none (NeoForge has no such event; far terrain is Horizon's own)",
       "side": "both",
@@ -6803,6 +6850,7 @@
     },
     {
       "name": "log_line",
+      "version": 1,
       "target": "horizon_client::native_client_hooks::native_log_line",
       "neoforge": "none (a log4j appender)",
       "mod_api": {
@@ -6811,6 +6859,7 @@
     },
     {
       "name": "menu_input_closed",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_menu_input_closed",
       "neoforge": "none (NeoForge has no such event; Bukkit's InventoryCloseEvent with the inventory's contents)",
       "side": "server",
@@ -6821,6 +6870,7 @@
     },
     {
       "name": "menu_links",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_menu_links",
       "neoforge": "none (a Java menu adds Slots over another block's IItemHandler, as Tinkers' Construct's crafting station shows the chest beside it)",
       "side": "server",
@@ -6831,6 +6881,7 @@
     },
     {
       "name": "layer_definitions",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_layer_definitions",
       "neoforge": "EntityRenderersEvent.RegisterLayerDefinitions",
       "side": "client",
@@ -6841,6 +6892,7 @@
     },
     {
       "name": "permission_check",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_permission_check",
       "neoforge": "PermissionGatherEvent.Handler (the handler a permissions mod installs answers PermissionAPI.getPermission)",
       "side": "server",
@@ -6851,6 +6903,7 @@
     },
     {
       "name": "permission_groups",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_permission_groups",
       "side": "server",
       "mod_api": {
@@ -6860,6 +6913,7 @@
     },
     {
       "name": "player_register_channels",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_register_channels",
       "neoforge": "none (NeoForge has no channel registration event; Bukkit's PlayerRegisterChannelEvent and PlayerUnregisterChannelEvent)",
       "side": "server",
@@ -6869,6 +6923,7 @@
     },
     {
       "name": "player_chat_v2",
+      "version": 1,
       "target": "horizon_client::lan::hub::chat::native_player_chat_v2",
       "neoforge": "net.neoforged.neoforge.event.ServerChatEvent (ICancellableEvent), with the sender's permission level",
       "side": "server",
@@ -6880,6 +6935,7 @@
     },
     {
       "name": "player_command_level",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_command_level",
       "neoforge": "none (NeoForge has no such event; Paper's VanillaCommandWrapper checks a minecraft.command node)",
       "side": "server",
@@ -6889,6 +6945,7 @@
     },
     {
       "name": "player_commands_sent_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_commands_sent_v2",
       "neoforge": "none (NeoForge has no such event; Paper's PlayerCommandSendEvent)",
       "side": "server",
@@ -6899,6 +6956,7 @@
     },
     {
       "name": "player_died_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_died_v2",
       "side": "server",
       "cancellable": false,
@@ -6908,6 +6966,7 @@
     },
     {
       "name": "player_fish_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_fish_v2",
       "neoforge": "none (NeoForge's ItemFishedEvent fires after the loot roll, in FishingHook.retrieve; Bukkit's PlayerFishEvent with getHand)",
       "side": "server",
@@ -6919,6 +6978,7 @@
     },
     {
       "name": "player_hurt_by_player",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_hurt_by_player",
       "neoforge": "LivingIncomingDamageEvent (a player victim, a player source; Bukkit's EntityDamageByEntityEvent)",
       "side": "server",
@@ -6930,6 +6990,7 @@
     },
     {
       "name": "player_inventory_changed",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_inventory_changed",
       "neoforge": "none (vanilla's InventoryChangeTrigger; quest and collection mods listen to ServerPlayer's container slotChanged)",
       "side": "server",
@@ -6940,6 +7001,7 @@
     },
     {
       "name": "player_join_message",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_join_message",
       "side": "server",
       "cancellable": false,
@@ -6949,6 +7011,7 @@
     },
     {
       "name": "player_launch_projectile_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_launch_projectile_v2",
       "neoforge": "none (Bukkit's ProjectileLaunchEvent for a player's throw)",
       "side": "server",
@@ -6960,6 +7023,7 @@
     },
     {
       "name": "player_leave_message",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_leave_message",
       "side": "server",
       "cancellable": false,
@@ -6969,6 +7033,7 @@
     },
     {
       "name": "player_logging_out",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_logging_out",
       "neoforge": "none (Bukkit's PlayerQuitEvent; NeoForge's PlayerLoggedOutEvent comes after the removal)",
       "side": "server",
@@ -6978,6 +7043,7 @@
     },
     {
       "name": "player_move",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_move",
       "neoforge": "none (Bukkit's PlayerMoveEvent)",
       "side": "server",
@@ -6989,6 +7055,7 @@
     },
     {
       "name": "player_physical_trigger",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::GameLevel<'_>::native_player_physical_trigger",
       "neoforge": "none (Bukkit's PlayerInteractEvent with Action.PHYSICAL)",
       "side": "server",
@@ -7000,6 +7067,7 @@
     },
     {
       "name": "player_pre_login",
+      "version": 1,
       "target": "horizon_client::lan::conn::native_player_pre_login",
       "neoforge": "none (Bukkit's AsyncPlayerPreLoginEvent)",
       "side": "server",
@@ -7011,6 +7079,7 @@
     },
     {
       "name": "player_profile",
+      "version": 1,
       "target": "horizon_client::lan::conn::native_player_profile",
       "neoforge": "none (Velocity's GameProfileRequestEvent, Paper's PlayerProfile in AsyncPlayerPreLoginEvent)",
       "side": "server",
@@ -7021,6 +7090,7 @@
     },
     {
       "name": "player_respawn_position",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_respawn_position",
       "neoforge": "PlayerRespawnPositionEvent",
       "side": "server",
@@ -7030,6 +7100,7 @@
     },
     {
       "name": "player_spawn_location",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_spawn_location",
       "neoforge": "none (Spigot's PlayerSpawnLocationEvent)",
       "side": "server",
@@ -7039,6 +7110,7 @@
     },
     {
       "name": "player_teleport",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_teleport",
       "neoforge": "EntityTeleportEvent (Bukkit's PlayerTeleportEvent)",
       "side": "server",
@@ -7050,6 +7122,7 @@
     },
     {
       "name": "player_tick_pre",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_tick_pre",
       "neoforge": "PlayerTickEvent.Pre",
       "side": "server",
@@ -7060,6 +7133,7 @@
     },
     {
       "name": "potion_splash_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_potion_splash_v2",
       "neoforge": "PotionSplashEvent (cancellable there too)",
       "side": "server",
@@ -7071,6 +7145,7 @@
     },
     {
       "name": "projectile_world_border",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_projectile_world_border",
       "neoforge": "none (26.3's projectile world border collision, MC-310476)",
       "side": "server",
@@ -7080,6 +7155,7 @@
     },
     {
       "name": "recipe_categories",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_recipe_categories",
       "neoforge": "none (JEI's IRecipeCategory and IRecipeRegistration, registered through the viewer's own API)",
       "side": "client",
@@ -7090,6 +7166,7 @@
     },
     {
       "name": "recipe_lookup",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_recipe_lookup",
       "neoforge": "none (JEI's IRecipesGui.show and EMI's EmiApi.displayRecipes/displayUses, called by other mods through the viewer's own API)",
       "side": "client",
@@ -7101,6 +7178,7 @@
     },
     {
       "name": "recipe_sources",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_recipe_sources",
       "neoforge": "none (JEI's IRecipeTransferHandler with extra source slots, as Tinkers' Construct's crafting station takes from adjacent inventories)",
       "side": "server",
@@ -7111,6 +7189,7 @@
     },
     {
       "name": "register_goals",
+      "version": 1,
       "target": "horizon_client::mobs::ai::native_register_goals",
       "neoforge": "Mob.registerGoals",
       "mod_api": {
@@ -7119,6 +7198,7 @@
     },
     {
       "name": "resource_pack_status_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_resource_pack_status_v2",
       "neoforge": "none (NeoForge has no resource pack answer event; Bukkit's PlayerResourcePackStatusEvent with getID)",
       "side": "server",
@@ -7128,6 +7208,7 @@
     },
     {
       "name": "right_click_block_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_right_click_block_v2",
       "neoforge": "PlayerInteractEvent.RightClickBlock (getHand)",
       "side": "server",
@@ -7139,6 +7220,7 @@
     },
     {
       "name": "screen_mouse_dragged_pre_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_screen_mouse_dragged_pre_v2",
       "neoforge": "ScreenEvent.MouseDragged.Pre",
       "side": "client",
@@ -7150,6 +7232,7 @@
     },
     {
       "name": "screen_mouse_scrolled_pre_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_screen_mouse_scrolled_pre_v2",
       "neoforge": "ScreenEvent.MouseScrolled.Pre",
       "side": "client",
@@ -7161,6 +7244,7 @@
     },
     {
       "name": "screen_text_field_char_typed_pre",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_screen_text_field_char_typed_pre",
       "side": "client",
       "cancellable": true,
@@ -7171,6 +7255,7 @@
     },
     {
       "name": "screen_transparent_background",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_screen_transparent_background",
       "neoforge": "ScreenEvent.Render.Pre (transparent background)",
       "side": "client",
@@ -7182,6 +7267,7 @@
     },
     {
       "name": "server_packet",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_server_packet",
       "neoforge": "none (NeoForge has no outgoing packet event; ProtocolLib's and PacketEvents' packet listeners)",
       "side": "server",
@@ -7193,6 +7279,7 @@
     },
     {
       "name": "server_packets",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_server_packets",
       "neoforge": "none (NeoForge has no packet counting event; PacketEvents' PacketSendEvent and PacketReceiveEvent)",
       "side": "server",
@@ -7203,6 +7290,7 @@
     },
     {
       "name": "server_stopped",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_server_stopped",
       "neoforge": "ServerStoppedEvent",
       "side": "server",
@@ -7213,6 +7301,7 @@
     },
     {
       "name": "server_tick_timed",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_server_tick_timed",
       "neoforge": "none (NeoForge has no tick timing event; spark's tick monitor and profiler)",
       "side": "server",
@@ -7223,6 +7312,7 @@
     },
     {
       "name": "sound_play",
+      "version": 1,
       "target": "horizon_client::sound_playback::native_sound_play",
       "side": "client",
       "cancellable": true,
@@ -7233,6 +7323,7 @@
     },
     {
       "name": "stateful_block_entity",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_stateful_block_entity",
       "mod_api": {
         "contract": "listen"
@@ -7240,6 +7331,7 @@
     },
     {
       "name": "block_entity_from_state",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::GameLevel<'_>::native_block_entity_from_state",
       "mod_api": {
         "contract": "replace",
@@ -7248,6 +7340,7 @@
     },
     {
       "name": "tab_complete_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_tab_complete_v2",
       "neoforge": "none (Bukkit's TabCompleter.onTabComplete; Brigadier's SuggestionProvider for ask_server nodes)",
       "side": "server",
@@ -7258,6 +7351,7 @@
     },
     {
       "name": "tnt_primed_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_tnt_primed_v2",
       "side": "server",
       "cancellable": true,
@@ -7268,6 +7362,7 @@
     },
     {
       "name": "toast_add",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_toast_add",
       "neoforge": "ToastAddEvent",
       "side": "client",
@@ -7279,6 +7374,7 @@
     },
     {
       "name": "tooltip_render_pre",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_tooltip_render_pre",
       "neoforge": "RenderTooltipEvent.Pre",
       "side": "client",
@@ -7290,6 +7386,7 @@
     },
     {
       "name": "trample",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_trample",
       "neoforge": "BlockEvent.FarmlandTrampleEvent",
       "side": "server",
@@ -7301,6 +7398,7 @@
     },
     {
       "name": "vehicle_moved_v2",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_vehicle_moved_v2",
       "neoforge": "none (NeoForge has no such event; Bukkit's VehicleMoveEvent)",
       "side": "server",
@@ -7312,6 +7410,7 @@
     },
     {
       "name": "wind_burst",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_wind_burst",
       "side": "server",
       "cancellable": false,
@@ -7322,6 +7421,7 @@
     },
     {
       "name": "world_submit",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_world_submit",
       "neoforge": "RenderLevelStageEvent (textured quads and text drawn right after the particles, before the hand)",
       "side": "client",
@@ -7332,6 +7432,7 @@
     },
     {
       "name": "world_primitives",
+      "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_world_primitives",
       "neoforge": "RenderLevelStageEvent (lines, boxes, beams and text drawn at the end of the world pass, before the hand)",
       "side": "client",
