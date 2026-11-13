@@ -453,21 +453,16 @@ pub fn enable_mod_in_profile(profile_dir: &Path, mod_id: &str) {
 pub fn infer_features_from_id_and_signals(
     mod_id: &str,
     title: &str,
-    description: &str,
+    _description: &str,
     rust_src: &str,
     class_signals: &BTreeSet<String>,
 ) -> BTreeSet<String> {
     let mut features = class_signals.clone();
     let id_low = mod_id.to_ascii_lowercase();
-    let combined = format!(
-        "{} {} {} {}",
-        id_low,
-        title.to_ascii_lowercase(),
-        description.to_ascii_lowercase(),
-        rust_src.to_ascii_lowercase()
-    );
+    let named = format!("{} {}", id_low, title.to_ascii_lowercase());
+    let code = rust_src.to_ascii_lowercase();
 
-    if id_low == "wrench" || combined.contains("wrench") || combined.contains("takes_apart") {
+    if id_low == "wrench" || named.contains("wrench") || code.contains("takes_apart") {
         features.insert("wrench".to_owned());
     }
     if id_low == "treefall"
@@ -475,11 +470,11 @@ pub fn infer_features_from_id_and_signals(
         || id_low == "fallingtree"
         || id_low == "treeharvester"
         || id_low == "treecapitator"
-        || combined.contains("treefall")
-        || combined.contains("fallingtree")
-        || combined.contains("treeharvester")
-        || combined.contains("treecapitator")
-        || (combined.contains("chop") && combined.contains("tree"))
+        || named.contains("treefall")
+        || named.contains("fallingtree")
+        || named.contains("treeharvester")
+        || named.contains("treecapitator")
+        || (named.contains("chop") && named.contains("tree"))
     {
         features.insert("treefall".to_owned());
     }
@@ -488,19 +483,19 @@ pub fn infer_features_from_id_and_signals(
         || id_low == "oreexcavator"
         || id_low == "diggusmaximus"
         || id_low == "excavator"
-        || combined.contains("veinminer")
-        || combined.contains("vein_miner")
-        || combined.contains("oreexcavator")
-        || combined.contains("diggusmaximus")
-        || combined.contains("ore_vein")
+        || named.contains("veinminer")
+        || named.contains("vein_miner")
+        || named.contains("oreexcavator")
+        || named.contains("diggusmaximus")
+        || named.contains("ore_vein")
     {
         features.insert("veinminer".to_owned());
     }
     if id_low == "appleskin"
-        || combined.contains("appleskin")
-        || combined.contains("saturation")
-        || combined.contains("exhaustion")
-        || combined.contains("foodhelper")
+        || named.contains("appleskin")
+        || named.contains("saturation")
+        || named.contains("exhaustion")
+        || named.contains("foodhelper")
     {
         features.insert("appleskin_hud".to_owned());
         features.insert("tooltip".to_owned());
@@ -509,58 +504,58 @@ pub fn infer_features_from_id_and_signals(
     if matches!(
         id_low.as_str(),
         "lookat" | "jade" | "wthit" | "waila" | "blockscope"
-    ) || combined.contains("jade")
-        || combined.contains("wthit")
-        || combined.contains("waila")
-        || combined.contains("lookat")
-        || combined.contains("blockscope")
-        || combined.contains("what am i looking at")
+    ) || named.contains("jade")
+        || named.contains("wthit")
+        || named.contains("waila")
+        || named.contains("lookat")
+        || named.contains("blockscope")
+        || named.contains("what am i looking at")
     {
         features.insert("jade_hud".to_owned());
         features.insert("hud_overlay".to_owned());
     }
     if matches!(id_low.as_str(), "fullbright" | "moregamma")
-        || combined.contains("fullbright")
-        || combined.contains("moregamma")
+        || named.contains("fullbright")
+        || named.contains("moregamma")
     {
         features.insert("fullbright".to_owned());
     }
     if matches!(id_low.as_str(), "rightclickharvest" | "right_click_crops")
-        || combined.contains("rightclickharvest")
-        || combined.contains("right_click_crops")
-        || (combined.contains("harvest") && combined.contains("crop"))
+        || named.contains("rightclickharvest")
+        || named.contains("right_click_crops")
+        || (named.contains("harvest") && named.contains("crop"))
     {
         features.insert("rightclickharvest".to_owned());
     }
     if matches!(id_low.as_str(), "carryblock" | "carry_block" | "carryon")
-        || combined.contains("carryblock")
-        || combined.contains("carry_block")
+        || named.contains("carryblock")
+        || named.contains("carry_block")
     {
         features.insert("carryblock".to_owned());
     }
     if matches!(id_low.as_str(), "mousetricks" | "mousetweaks")
-        || combined.contains("mousetricks")
-        || combined.contains("mousetweaks")
+        || named.contains("mousetricks")
+        || named.contains("mousetweaks")
     {
         features.insert("mousetricks".to_owned());
     }
     if matches!(id_low.as_str(), "fps_overlay" | "fps_counter" | "fpsdisplay")
-        || combined.contains("fps_overlay")
-        || combined.contains("native_frame_rate")
+        || named.contains("fps_overlay")
+        || code.contains("native_frame_rate")
     {
         features.insert("fps_overlay".to_owned());
         features.insert("hud_overlay".to_owned());
     }
     if id_low == "keystrokes"
-        || combined.contains("keystrokes")
-        || combined.contains("native_clicks")
+        || named.contains("keystrokes")
+        || code.contains("native_clicks")
     {
         features.insert("keystrokes".to_owned());
         features.insert("hud_overlay".to_owned());
     }
     if matches!(id_low.as_str(), "coords_hud" | "coordinates_hud" | "directionhud")
-        || combined.contains("coords_hud")
-        || combined.contains("coordinates_hud")
+        || named.contains("coords_hud")
+        || named.contains("coordinates_hud")
     {
         features.insert("coords_hud".to_owned());
         features.insert("hud_overlay".to_owned());
@@ -568,15 +563,15 @@ pub fn infer_features_from_id_and_signals(
     if matches!(
         id_low.as_str(),
         "armor_status" | "armor_hud" | "held_item_info" | "durabilityviewer"
-    ) || combined.contains("armor_status")
-        || combined.contains("armor_hud")
-        || combined.contains("held_item_info")
+    ) || named.contains("armor_status")
+        || named.contains("armor_hud")
+        || named.contains("held_item_info")
     {
         features.insert("armor_status".to_owned());
         features.insert("hud_overlay".to_owned());
     }
     if matches!(id_low.as_str(), "status_effect_hud" | "status_effects" | "potionhud")
-        || combined.contains("status_effect_hud")
+        || named.contains("status_effect_hud")
     {
         features.insert("status_effect_hud".to_owned());
         features.insert("hud_overlay".to_owned());
@@ -584,41 +579,41 @@ pub fn infer_features_from_id_and_signals(
     if matches!(
         id_low.as_str(),
         "enchantmenthints" | "enchantment_hints" | "enchdesc"
-    ) || combined.contains("enchantmenthints")
-        || combined.contains("enchantment_hints")
+    ) || named.contains("enchantmenthints")
+        || named.contains("enchantment_hints")
     {
         features.insert("enchantmenthints".to_owned());
         features.insert("tooltip".to_owned());
     }
     if matches!(id_low.as_str(), "shulkerpeek" | "shulkerboxtooltip")
-        || combined.contains("shulkerpeek")
-        || combined.contains("shulkerboxtooltip")
+        || named.contains("shulkerpeek")
+        || named.contains("shulkerboxtooltip")
     {
         features.insert("shulkerpeek".to_owned());
         features.insert("tooltip".to_owned());
     }
     if matches!(id_low.as_str(), "toggle_sprint" | "togglesprint" | "bettersprinting")
-        || combined.contains("toggle_sprint")
-        || combined.contains("togglesprint")
+        || named.contains("toggle_sprint")
+        || named.contains("togglesprint")
     {
         features.insert("toggle_sprint".to_owned());
         features.insert("hud_overlay".to_owned());
     }
-    if id_low == "waypoints" || combined.contains("waypoints") {
+    if id_low == "waypoints" || named.contains("waypoints") {
         features.insert("waypoints".to_owned());
         features.insert("hud_overlay".to_owned());
     }
     if matches!(id_low.as_str(), "light_overlay" | "lightoverlay")
-        || combined.contains("light_overlay")
+        || named.contains("light_overlay")
     {
         features.insert("light_overlay".to_owned());
     }
-    if id_low == "eatinganimation"
-        || id_low.contains("food")
-        || id_low.contains("eat")
-        || combined.contains("eatinganimation")
-        || combined.contains("foodanimation")
-        || combined.contains("notenoughanimations")
+    if matches!(
+        id_low.as_str(),
+        "eatinganimation" | "eating_animation" | "foodanimation" | "notenoughanimations"
+    ) || named.contains("eatinganimation")
+        || named.contains("foodanimation")
+        || named.contains("notenoughanimations")
     {
         features.insert("eating_animation".to_owned());
         features.insert("eatinganimation".to_owned());
@@ -626,21 +621,21 @@ pub fn infer_features_from_id_and_signals(
     }
     if id_low.contains("motionblur")
         || id_low.contains("motion_blur")
-        || combined.contains("motionblur")
-        || combined.contains("motion_blur")
+        || named.contains("motionblur")
+        || named.contains("motion_blur")
     {
         features.insert("motion_blur".to_owned());
     }
-    if combined.contains("thunder")
-        || combined.contains("lightning")
-        || combined.contains("immersivethunder")
+    if named.contains("thunder")
+        || named.contains("lightning")
+        || named.contains("immersivethunder")
     {
         features.insert("immersive_thunder".to_owned());
     }
-    if combined.contains("dynamiclight") || combined.contains("lambdynamiclights") {
+    if named.contains("dynamiclight") || named.contains("lambdynamiclights") {
         features.insert("dynamic_lights".to_owned());
     }
-    if id_low.contains("zoom") || combined.contains("okzoomer") || combined.contains("native_zoom") {
+    if id_low.contains("zoom") || named.contains("okzoomer") || code.contains("native_zoom") {
         features.insert("zoom".to_owned());
     }
     if features.is_empty() {
@@ -2967,6 +2962,52 @@ pub fn title_case_id(id: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn inferred(id: &str, title: &str, description: &str, src: &str) -> BTreeSet<String> {
+        infer_features_from_id_and_signals(id, title, description, src, &BTreeSet::new())
+    }
+
+    #[test]
+    fn mod_menu_is_not_taken_for_the_mods_it_lists() {
+        let features = inferred(
+            "modmenu",
+            "Mod Menu",
+            "Lists wrench, veinminer, treefall, appleskin, waypoints and zoom mods; saturation, harvest crop, thunder",
+            "const LISTED: &str = \"wrench veinminer treefall jade fullbright waypoints zoom lightning saturation\";",
+        );
+        for feature in [
+            "wrench",
+            "veinminer",
+            "treefall",
+            "appleskin_hud",
+            "jade_hud",
+            "fullbright",
+            "waypoints",
+            "zoom",
+            "rightclickharvest",
+            "immersive_thunder",
+        ] {
+            assert!(!features.contains(feature), "modmenu was given {feature}");
+        }
+    }
+
+    #[test]
+    fn known_mods_are_still_recognised_by_id_title_and_hooks() {
+        assert!(inferred("wrench", "Wrench", "", "").contains("wrench"));
+        assert!(inferred("veinminer", "Veinminer", "", "").contains("veinminer"));
+        assert!(inferred("appleskin", "AppleSkin", "", "").contains("appleskin_hud"));
+        assert!(inferred("some_id", "FallingTree", "", "").contains("treefall"));
+        assert!(inferred("x", "X", "", "fn native_zoom() {}").contains("zoom"));
+        assert!(inferred("okzoomer", "Zoomer", "", "").contains("zoom"));
+        assert!(inferred("eatinganimation", "Eating", "", "").contains("eating_animation"));
+    }
+
+    #[test]
+    fn ids_that_merely_contain_eat_or_food_are_not_eating_animations() {
+        for id in ["create", "weather", "greatsword", "foodcore"] {
+            assert!(!inferred(id, id, "", "").contains("eating_animation"), "{id}");
+        }
+    }
 
     #[test]
     fn transpiles_fabric_jar_into_valid_hnmod_and_hmod() {
