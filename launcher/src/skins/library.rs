@@ -16,6 +16,8 @@ pub struct Entry {
     pub id: String,
     pub title: String,
     pub kind: Kind,
+    #[serde(default)]
+    pub slim: bool,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Selection {
@@ -83,6 +85,18 @@ impl Library {
             true
         });
         for selection in value.selections.values_mut() {
+            if let Some(id) = selection.skin.clone()
+                && selection.model == Model::Slim
+            {
+                if let Some(entry) = value
+                    .entries
+                    .iter_mut()
+                    .find(|e| e.id == id && e.kind == Kind::Skin)
+                {
+                    entry.slim = true;
+                }
+                selection.model = Model::Classic;
+            }
             if selection
                 .cape
                 .as_ref()
@@ -135,6 +149,7 @@ impl Library {
                 id: id.clone(),
                 title: title.chars().filter(|c| !c.is_control()).take(48).collect(),
                 kind,
+                slim: false,
             });
         }
         self.save(root)?;
@@ -160,6 +175,34 @@ impl Library {
         if !shared {
             let _ = std::fs::remove_file(path);
         }
+        Ok(())
+    }
+    pub fn model_of(&self, id: &str) -> Model {
+        match self
+            .entries
+            .iter()
+            .any(|e| e.id == id && e.kind == Kind::Skin && e.slim)
+        {
+            true => Model::Slim,
+            false => Model::Classic,
+        }
+    }
+    pub fn set_model(&mut self, root: &Path, id: &str, model: Model) -> Result<(), String> {
+        let mut next = self.clone();
+        let mut found = false;
+        for entry in next
+            .entries
+            .iter_mut()
+            .filter(|e| e.id == id && e.kind == Kind::Skin)
+        {
+            entry.slim = model == Model::Slim;
+            found = true;
+        }
+        if !found {
+            return Err("That skin is not in your gallery.".into());
+        }
+        next.save(root)?;
+        *self = next;
         Ok(())
     }
     pub fn import_file(&mut self, root: &Path, path: &Path, kind: Kind) -> Result<String, String> {
@@ -213,8 +256,8 @@ impl Library {
         } else {
             local(&selection.cape)?.or_else(|| cloud.and_then(|(_, _, p)| p.map(Path::to_owned)))
         };
-        let slim = if selection.skin.is_some() {
-            selection.model == Model::Slim
+        let slim = if let Some(id) = &selection.skin {
+            self.model_of(id) == Model::Slim
         } else {
             cloud.is_some_and(|(_, s, _)| s)
         };
@@ -348,6 +391,7 @@ mod tests {
             id: id.clone(),
             title: "Cape".into(),
             kind: Kind::Cape,
+            slim: false,
         });
         library.remove(&root, &id, Kind::Skin).unwrap();
         assert!(Library::image(&root, &id).unwrap().is_file());

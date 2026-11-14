@@ -238,11 +238,13 @@ impl Changer {
         }
     }
 
+    pub fn model_of(&self, index: usize) -> Model {
+        self.entry(index)
+            .map_or(Model::Classic, |e| self.library.model_of(&e.id))
+    }
+
     pub fn model(&self) -> Model {
-        self.library
-            .selections
-            .get(&self.key)
-            .map_or(Model::Classic, |s| s.model)
+        self.model_of(self.selected)
     }
 
     pub fn active(&self) -> usize {
@@ -291,12 +293,15 @@ impl Changer {
     }
 
     pub fn toggle_model(&mut self) -> Result<(), String> {
-        let selection = self.library.selections.entry(self.key.clone()).or_default();
-        selection.model = match selection.model {
+        let id = self
+            .entry(self.selected)
+            .map(|e| e.id.clone())
+            .ok_or("The default skin always has classic arms.")?;
+        let next = match self.library.model_of(&id) {
             Model::Classic => Model::Slim,
             Model::Slim => Model::Classic,
         };
-        self.library.save(&self.root)?;
+        self.library.set_model(&self.root, &id, next)?;
         self.stage = None;
         Ok(())
     }
@@ -319,7 +324,7 @@ impl Changer {
     }
 
     pub fn thumb(&mut self, index: usize) -> Runs {
-        let model = self.model();
+        let model = self.model_of(index);
         let id = self.entry(index).map(|e| e.id.clone()).unwrap_or_default();
         let slim = model == Model::Slim;
         if let Some(found) = self.thumbs.get(&(id.clone(), slim)) {
@@ -588,6 +593,59 @@ mod tests {
         missing.root = root.join("absent");
         missing.write(&home).unwrap();
         assert!(Link::read(&home).is_none());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn each_skin_keeps_its_own_arm_model_and_the_handoff_follows_the_applied_one() {
+        let root = scratch("models");
+        let (mut changer, _) = changer(&root);
+        let game = root.join("game");
+        changer.select_tile(1);
+        changer.toggle_model().unwrap();
+        changer.apply().unwrap();
+        assert_eq!(changer.model_of(1), Model::Slim);
+        assert_eq!(changer.model_of(2), Model::Classic);
+        assert_eq!(changer.model_of(0), Model::Classic);
+        let slim = |changer: &Changer| {
+            changer.prepare_game(&game, None).unwrap();
+            serde_json::from_slice::<serde_json::Value>(
+                &std::fs::read(game.join("horizon-appearance.json")).unwrap(),
+            )
+            .unwrap()["slim"]
+                .as_bool()
+                .unwrap()
+        };
+        assert!(slim(&changer));
+        changer.select_tile(2);
+        changer.apply().unwrap();
+        assert!(!slim(&changer));
+        changer.select_tile(0);
+        assert!(changer.toggle_model().is_err());
+        let reopened = Changer::new(&root, "offline:me", None).unwrap();
+        assert_eq!(reopened.model_of(1), Model::Slim);
+        assert_eq!(reopened.model_of(3), Model::Classic);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn an_old_selection_wide_slim_flag_moves_onto_the_skin_it_applied_to() {
+        let root = scratch("migrate");
+        let (mut changer, ids) = changer(&root);
+        changer.select_tile(2);
+        changer.apply().unwrap();
+        let path = root.join("wardrobe.json");
+        let mut json: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        json["selections"]["offline:me"]["model"] = "slim".into();
+        for entry in json["entries"].as_array_mut().unwrap() {
+            entry.as_object_mut().unwrap().remove("slim");
+        }
+        std::fs::write(&path, json.to_string()).unwrap();
+        let library = Library::load(&root).unwrap();
+        assert_eq!(library.model_of(&ids[1]), Model::Slim);
+        assert_eq!(library.model_of(&ids[0]), Model::Classic);
+        assert_eq!(library.selections["offline:me"].model, Model::Classic);
         std::fs::remove_dir_all(root).unwrap();
     }
 }
