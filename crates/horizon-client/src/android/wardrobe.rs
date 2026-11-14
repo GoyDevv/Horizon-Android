@@ -25,7 +25,7 @@ pub(super) enum CloudAction {
     Upload,
     Cape(usize),
 }
-const TOAST_SECONDS: f32 = 3.5;
+const TOAST_SECONDS: f32 = 5.5;
 
 pub(super) struct Wardrobe {
     pub root: PathBuf,
@@ -42,6 +42,8 @@ pub(super) struct Wardrobe {
     thumbs: std::collections::HashMap<(String, bool), changer::Runs>,
     rect: [f32; 4],
     fingers: std::collections::BTreeMap<u64, [f32; 2]>,
+    pub remove_mode: bool,
+    marked: std::collections::BTreeSet<String>,
     note: String,
     note_seen: String,
     note_at: Option<std::time::Instant>,
@@ -77,6 +79,8 @@ impl Wardrobe {
             rect: [0.0; 4],
             view: [0.0; 3],
             fingers: Default::default(),
+            remove_mode: false,
+            marked: std::collections::BTreeSet::new(),
             note,
             note_seen: String::new(),
             note_at: None,
@@ -180,6 +184,14 @@ impl Wardrobe {
         if self.damaged || crate::documents::busy() {
             return;
         }
+        if self.remove_mode {
+            if let Some(entry) = self.library.entries.get(index)
+                && !self.marked.remove(&entry.id)
+            {
+                self.marked.insert(entry.id.clone());
+            }
+            return;
+        }
         if let Some(entry) = self.library.entries.get(index).cloned() {
             self.note = match self
                 .library
@@ -192,19 +204,42 @@ impl Wardrobe {
             self.preview();
         }
     }
-    pub fn remove(&mut self, index: usize) {
+    pub fn toggle_remove_mode(&mut self) {
+        self.remove_mode = !self.remove_mode;
+        self.marked.clear();
+    }
+    pub fn remove_marked(&mut self) {
         if self.damaged || crate::documents::busy() {
             return;
         }
-        if let Some(entry) = self.library.entries.get(index).cloned() {
-            self.note = match self.library.remove(&self.root, &entry.id, entry.kind) {
-                Ok(()) => format!("Removed \"{}\" from your gallery.", entry.title),
-                Err(error) => error,
-            };
-            self.thumbs.retain(|(id, _), _| *id != entry.id);
-            self.selection_changed_at = Some(std::time::Instant::now());
-            self.preview();
+        let kind = self.kind();
+        let targets: Vec<Entry> = self
+            .library
+            .entries
+            .iter()
+            .filter(|e| e.kind == kind && self.marked.contains(&e.id))
+            .cloned()
+            .collect();
+        let mut removed = 0usize;
+        let mut failure = None;
+        for entry in &targets {
+            match self.library.remove(&self.root, &entry.id, entry.kind) {
+                Ok(()) => {
+                    removed += 1;
+                    self.thumbs.retain(|(id, _), _| *id != entry.id);
+                }
+                Err(error) => failure = Some(error),
+            }
         }
+        self.marked.clear();
+        self.remove_mode = false;
+        self.note = match failure {
+            Some(error) => error,
+            None if removed == 1 => "Removed 1 item from your gallery.".into(),
+            None => format!("Removed {removed} items from your gallery."),
+        };
+        self.selection_changed_at = Some(std::time::Instant::now());
+        self.preview();
     }
     fn cape_thumb(&mut self, id: &str) -> Option<changer::Runs> {
         let key = (format!("cape:{id}"), false);
@@ -234,7 +269,7 @@ impl Wardrobe {
         Some(runs)
     }
     pub fn import(&mut self) {
-        if self.damaged {
+        if self.damaged || self.remove_mode {
             return;
         }
         self.note = match crate::documents::begin_appearance(self.root.clone(), self.kind()) {
@@ -536,6 +571,8 @@ impl Wardrobe {
 
     pub fn set_tab(&mut self, capes: bool) {
         if self.capes != capes {
+            self.remove_mode = false;
+            self.marked.clear();
             self.capes = capes;
             self.tab_changed_at = Some(std::time::Instant::now());
             // Orient camera to showcase the back when switching to Capes, or front when switching to Skins
@@ -635,9 +672,44 @@ impl Wardrobe {
             };
 
         let tabs_y = top;
-        let tabs_w = w - 46.0;
+        let tabs_w = w - 92.0;
         ui.rounded(x, tabs_y, tabs_w, 38.0, 8.0, theme.surface_dim);
         ui.border(x, tabs_y, tabs_w, 38.0, 8.0, theme.border);
+        let trash_rect = [x + w - 84.0, tabs_y, 38.0, 38.0];
+        ui.rounded(
+            trash_rect[0],
+            trash_rect[1],
+            trash_rect[2],
+            trash_rect[3],
+            8.0,
+            if self.remove_mode {
+                theme.danger
+            } else {
+                theme.surface_dim
+            },
+        );
+        if !self.remove_mode {
+            ui.border(
+                trash_rect[0],
+                trash_rect[1],
+                trash_rect[2],
+                trash_rect[3],
+                8.0,
+                theme.border,
+            );
+        }
+        ui.icon(
+            Icon::Trash,
+            trash_rect[0] + 9.0,
+            trash_rect[1] + 9.0,
+            20.0,
+            if self.remove_mode {
+                theme.on_accent
+            } else {
+                theme.danger
+            },
+        );
+        targets.push((trash_rect, Action::WardrobeRemoveMode));
         let import_rect = [x + w - 38.0, tabs_y, 38.0, 38.0];
         ui.rounded(
             import_rect[0],
@@ -645,16 +717,26 @@ impl Wardrobe {
             import_rect[2],
             import_rect[3],
             8.0,
-            theme.accent,
+            if self.remove_mode {
+                theme.surface_dim
+            } else {
+                theme.accent
+            },
         );
         ui.icon(
             Icon::Plus,
             import_rect[0] + 9.0,
             import_rect[1] + 9.0,
             20.0,
-            theme.on_accent,
+            if self.remove_mode {
+                theme.text_muted
+            } else {
+                theme.on_accent
+            },
         );
-        targets.push((import_rect, Action::WardrobeImport));
+        if !self.remove_mode {
+            targets.push((import_rect, Action::WardrobeImport));
+        }
         let tw = (tabs_w - 8.0) * 0.5;
         for (i, (lbl, is_cape, active)) in [
             (format!("Skins ({skin_count})"), false, !self.capes),
@@ -834,63 +916,71 @@ impl Wardrobe {
             primary_toggle_y + 42.0 + slide_y
         };
 
-        // Active Appearance Details & Primary Action Bar
-        let active_title = if let Some(id) = selected_id {
-            self.library
-                .entries
-                .iter()
-                .find(|e| e.id == id && e.kind == self.kind())
-                .map(|e| format!("Active Local: {}", e.title))
-                .unwrap_or_else(|| "Active Local Override".into())
-        } else if self.capes {
-            if selection.hide_cape {
-                "Cape Hidden Locally".into()
-            } else if let Some(c) = self.cache.snapshot.capes.iter().find(|c| c.active) {
-                format!("Active Cloud Cape: {}", c.title)
-            } else if self.provider.is_some() {
-                "Account Cloud Cape".into()
+        let marked_here = self
+            .library
+            .entries
+            .iter()
+            .filter(|e| e.kind == self.kind() && self.marked.contains(&e.id))
+            .count();
+        let bar_h = 40.0;
+        if self.remove_mode {
+            ui.rounded(lx, listtop, lw, bar_h, 12.0, theme.surface);
+            ui.border(lx, listtop, lw, bar_h, 12.0, theme.danger);
+            let cancel = [lx + lw - 168.0, listtop + 6.0, 74.0, 28.0];
+            let confirm = [lx + lw - 88.0, listtop + 6.0, 82.0, 28.0];
+            let label = if marked_here == 0 {
+                "Select items to remove".to_string()
             } else {
-                "No Cape Equipped".into()
-            }
-        } else if self.provider.is_some() {
-            format!("Cloud Profile ({})", self.name)
-        } else {
-            "Default Appearance (Steve / Classic)".into()
-        };
-
-        let detail_h = 34.0;
-        ui.rounded(lx, listtop, lw, detail_h, 12.0, theme.surface);
-        ui.border(lx, listtop, lw, detail_h, 12.0, theme.border);
-        let status = if self.worker.is_some() {
-            Some("Synchronizing...")
-        } else if crate::documents::busy() {
-            Some("Waiting for Android file picker...")
-        } else {
-            None
-        };
-        let status_w = status.map_or(0.0, |t| ui.measure(Face::Regular, 9.5, t) + 12.0);
-        let info_w = (lw - 24.0 - status_w).max(60.0);
-        let fitted_active = ui.fit_text(Face::SemiBold, 11.5, &active_title, info_w);
-        ui.text(
-            Face::SemiBold,
-            11.5,
-            lx + 12.0,
-            listtop + 9.0,
-            theme.text_primary,
-            &fitted_active,
-        );
-        if let Some(status) = status {
+                format!("{marked_here} selected")
+            };
+            let label = ui.fit_text(Face::SemiBold, 11.5, &label, (lw - 190.0).max(50.0));
             ui.text(
-                Face::Regular,
-                9.5,
-                lx + lw - status_w,
-                listtop + 11.0,
-                theme.accent,
-                status,
+                Face::SemiBold,
+                11.5,
+                lx + 12.0,
+                listtop + 12.0,
+                theme.text_primary,
+                &label,
             );
+            button(
+                ui,
+                targets,
+                cancel,
+                "Cancel",
+                Action::WardrobeRemoveMode,
+                false,
+            );
+            if marked_here > 0 {
+                ui.rounded(
+                    confirm[0],
+                    confirm[1],
+                    confirm[2],
+                    confirm[3],
+                    8.0,
+                    theme.danger,
+                );
+                ui.centered_fit(
+                    Face::SemiBold,
+                    10.5,
+                    confirm,
+                    theme.on_accent,
+                    &format!("Remove {marked_here}"),
+                );
+                targets.push((confirm, Action::WardrobeRemoveMarked));
+            } else {
+                ui.rounded(
+                    confirm[0],
+                    confirm[1],
+                    confirm[2],
+                    confirm[3],
+                    8.0,
+                    theme.surface_dim,
+                );
+                ui.centered_fit(Face::SemiBold, 10.5, confirm, theme.text_muted, "Remove");
+            }
         }
 
-        let list_start = listtop + detail_h + 10.0;
+        let list_start = listtop + if self.remove_mode { bar_h + 8.0 } else { 0.0 };
         let bottom = h - 8.0;
         let mut row = list_start - scroll;
         let card_h = 42.0;
@@ -1052,7 +1142,7 @@ impl Wardrobe {
             let gap = 8.0;
             let columns = changer::columns(lw, 112.0, gap);
             let tile_w = (lw - gap * (columns as f32 - 1.0)) / columns as f32;
-            let tile_h = 176.0;
+            let tile_h = 140.0;
             shown_items += local.len();
             for (n, (index, entry)) in local.iter().enumerate() {
                 let r =
@@ -1061,13 +1151,14 @@ impl Wardrobe {
                     continue;
                 }
                 let is_sel = selected_id == Some(entry.id.as_str());
+                let is_marked = self.marked.contains(&entry.id);
                 ui.rounded(
                     r[0],
                     r[1],
                     r[2],
                     r[3],
                     12.0,
-                    if is_sel {
+                    if is_sel && !self.remove_mode {
                         theme.surface_selected
                     } else {
                         theme.surface
@@ -1079,8 +1170,14 @@ impl Wardrobe {
                     r[2],
                     r[3],
                     12.0,
-                    if is_sel { 1.6 } else { 1.0 },
-                    if is_sel { theme.accent } else { theme.border },
+                    if is_sel || is_marked { 1.6 } else { 1.0 },
+                    if is_marked {
+                        theme.danger
+                    } else if is_sel && !self.remove_mode {
+                        theme.accent
+                    } else {
+                        theme.border
+                    },
                 );
                 targets.push((r, Action::WardrobeSelect(*index)));
                 let stage = [r[0] + 6.0, r[1] + 6.0, r[2] - 12.0, 104.0];
@@ -1112,7 +1209,26 @@ impl Wardrobe {
                         );
                     }
                 }
-                if !self.capes {
+                if self.remove_mode {
+                    let c = [stage[0] + 4.0, stage[1] + 4.0, 22.0, 22.0];
+                    ui.rounded(
+                        c[0],
+                        c[1],
+                        c[2],
+                        c[3],
+                        11.0,
+                        if is_marked {
+                            theme.danger
+                        } else {
+                            theme.surface
+                        },
+                    );
+                    if !is_marked {
+                        ui.stroke_rounded(c[0], c[1], c[2], c[3], 11.0, 1.4, theme.border);
+                    } else {
+                        ui.icon(Icon::Check, c[0] + 3.0, c[1] + 3.0, 16.0, theme.on_accent);
+                    }
+                } else if !self.capes {
                     let slim = self.library.model_of(&entry.id) == Model::Slim;
                     let label = if slim { "Slim" } else { "Classic" };
                     let pw = ui.measure(Face::SemiBold, 9.0, label) + 14.0;
@@ -1130,24 +1246,6 @@ impl Wardrobe {
                     r[1] + 114.0,
                     theme.text_primary,
                     &title,
-                );
-                let half = (r[2] - 18.0) * 0.5;
-                let buttons_y = r[1] + r[3] - 34.0;
-                button(
-                    ui,
-                    targets,
-                    [r[0] + 6.0, buttons_y, half, 28.0],
-                    if is_sel { "Active" } else { "Apply" },
-                    Action::WardrobeSelect(*index),
-                    is_sel,
-                );
-                button(
-                    ui,
-                    targets,
-                    [r[0] + 12.0 + half, buttons_y, half, 28.0],
-                    "Remove",
-                    Action::WardrobeRemove(*index),
-                    false,
                 );
             }
             row = list_start - scroll + local.len().div_ceil(columns) as f32 * (tile_h + gap);

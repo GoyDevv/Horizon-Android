@@ -78,6 +78,8 @@ fn my3_muted() -> u32 {
     horizon_client::ui_theme::active_theme().text_muted
 }
 
+const STATUS_TOAST_SECONDS: f32 = 5.5;
+
 /// Smooth 60fps UI animation state across navigation, pages, accordions, theme previews, progress bars, and modals.
 /// Automatically respects `motion::reduced_motion()` on low-end Android hardware.
 pub(crate) struct AnimState {
@@ -92,6 +94,8 @@ pub(crate) struct AnimState {
     pub page_slide: f32,
     pub sub_tab_t: f32,
     pub toast_anim: f32,
+    pub toast_text: String,
+    pub toast_at: Option<std::time::Instant>,
     pub progress_smooth: f32,
     pub modal_anim: f32,
     pub shimmer_phase: f32,
@@ -117,6 +121,8 @@ impl Default for AnimState {
             page_slide: 0.0,
             sub_tab_t: 1.0,
             toast_anim: 1.0,
+            toast_text: String::new(),
+            toast_at: None,
             progress_smooth: 0.0,
             modal_anim: 0.0,
             shimmer_phase: 0.0,
@@ -245,6 +251,12 @@ impl AnimState {
         if !self.intro_done {
             return true;
         }
+        if self
+            .toast_at
+            .is_some_and(|t| t.elapsed().as_secs_f32() < STATUS_TOAST_SECONDS + 0.2)
+        {
+            return true;
+        }
         if horizon_client::ui_theme::motion::reduced_motion() {
             return false;
         }
@@ -311,7 +323,8 @@ pub(super) enum Action {
     SelectOffline,
     WardrobeKind(bool),
     WardrobeSelect(usize),
-    WardrobeRemove(usize),
+    WardrobeRemoveMode,
+    WardrobeRemoveMarked,
     WardrobeImport,
     WardrobeCloud,
     WardrobeUpload,
@@ -2366,7 +2379,16 @@ impl Launcher {
             || (self.catalog.downloading.is_some() && self.catalog.busy());
         if !in_progress_dialog {
             let status = self.error.as_deref().unwrap_or(&self.catalog.status);
-            if !status.is_empty() && !page.is_catalog() {
+            if status != self.anim.toast_text {
+                self.anim.toast_text = status.to_string();
+                self.anim.toast_at = (!status.is_empty()).then(std::time::Instant::now);
+                self.anim.toast_anim = 0.0;
+            }
+            let toast_live = self
+                .anim
+                .toast_at
+                .is_some_and(|t| t.elapsed().as_secs_f32() < STATUS_TOAST_SECONDS);
+            if !status.is_empty() && toast_live && !page.is_catalog() {
                 let max_snack_w = content_w.max(160.0);
                 ui.m3_snackbar_toast(
                     content_x,
@@ -7500,7 +7522,8 @@ impl Launcher {
                 self.catalog.scroll = 0.0;
             }
             Some(Action::WardrobeSelect(index)) => self.wardrobe.select(index),
-            Some(Action::WardrobeRemove(index)) => self.wardrobe.remove(index),
+            Some(Action::WardrobeRemoveMode) => self.wardrobe.toggle_remove_mode(),
+            Some(Action::WardrobeRemoveMarked) => self.wardrobe.remove_marked(),
             Some(Action::WardrobeImport) => self.wardrobe.import(),
             Some(Action::WardrobeCloud) => self
                 .wardrobe

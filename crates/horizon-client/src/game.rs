@@ -17361,6 +17361,7 @@ impl Game<'_> {
                     if let Some(r) = &self.renderer {
                         let b = HudBatch::new([r.config.width, r.config.height]);
                         self.cursor = (position.x as f32 / b.scale, position.y as f32 / b.scale);
+                        self.title_spin_drag();
                         if self.dialog_open() {
                             self.dialog_drag();
                         }
@@ -17594,6 +17595,7 @@ impl Game<'_> {
                     button: MouseButton::Left,
                     ..
                 } if self.title.is_some() && self.screen != Screen::Options => {
+                    self.title_spin_release();
                     if let Some(title) = &mut self.title {
                         title.release();
                         title.release_field();
@@ -17604,6 +17606,9 @@ impl Game<'_> {
                     button: MouseButton::Left,
                     ..
                 } if self.title.is_some() && state == ElementState::Pressed => {
+                    if self.title_spin_press() {
+                        return Ok(());
+                    }
                     let size = self
                         .renderer
                         .as_ref()

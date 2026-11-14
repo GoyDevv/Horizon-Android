@@ -7,7 +7,7 @@ use super::Game;
 #[cfg(target_os = "android")]
 use super::Screen;
 #[cfg(target_os = "android")]
-use crate::skins::changer::{self, Changer, Link, Runs};
+use crate::skins::changer::{self, Changer, Link};
 #[cfg(target_os = "android")]
 use horizon_client::{hud::HudBatch, text::Text, ui};
 
@@ -20,7 +20,11 @@ pub(super) struct SkinChangerUi {
     #[cfg(target_os = "android")]
     from_title: bool,
     #[cfg(target_os = "android")]
-    preview_tried: bool,
+    link_ok: Option<bool>,
+    #[cfg(target_os = "android")]
+    title_spin: f32,
+    #[cfg(target_os = "android")]
+    title_grab: Option<f32>,
 }
 
 #[cfg(target_os = "android")]
@@ -30,6 +34,7 @@ struct State {
     scroll: f32,
     grab: Grab,
     note: Option<(String, bool)>,
+    spin: f32,
 }
 
 #[cfg(target_os = "android")]
@@ -44,6 +49,26 @@ enum Grab {
         scroll: f32,
         moved: bool,
     },
+}
+
+#[cfg(target_os = "android")]
+struct ModelJob {
+    rect: [f32; 4],
+    clip: [f32; 4],
+    skin: Option<(String, std::sync::Arc<Vec<u8>>)>,
+    slim: bool,
+    cape: Option<(String, std::sync::Arc<Vec<u8>>)>,
+    yaw: f32,
+    zoom: f32,
+}
+
+#[cfg(target_os = "android")]
+fn overlap(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
+    let x0 = a[0].max(b[0]);
+    let y0 = a[1].max(b[1]);
+    let x1 = (a[0] + a[2]).min(b[0] + b[2]);
+    let y1 = (a[1] + a[3]).min(b[1] + b[3]);
+    [x0, y0, (x1 - x0).max(0.0), (y1 - y0).max(0.0)]
 }
 
 #[cfg(target_os = "android")]
@@ -133,33 +158,8 @@ impl Layout {
 }
 
 #[cfg(target_os = "android")]
-fn argb(color: [u8; 4]) -> u32 {
-    (u32::from(color[3]) << 24)
-        | (u32::from(color[0]) << 16)
-        | (u32::from(color[1]) << 8)
-        | u32::from(color[2])
-}
-
-#[cfg(target_os = "android")]
 fn inside(point: (f32, f32), rect: [f32; 4]) -> bool {
     ui::hovered(point, rect[0], rect[1], rect[2], rect[3])
-}
-
-#[cfg(target_os = "android")]
-fn draw_runs(
-    batch: &mut HudBatch,
-    atlas: &horizon_client::hud::HudAtlas,
-    runs: &Runs,
-    origin: (f32, f32),
-    scale: f32,
-) {
-    for (rect, color) in runs.iter() {
-        let x0 = (origin.0 + rect[0] * scale).floor();
-        let y0 = (origin.1 + rect[1] * scale).floor();
-        let x1 = (origin.0 + (rect[0] + rect[2]) * scale).ceil();
-        let y1 = (origin.1 + (rect[1] + rect[3]) * scale).ceil();
-        batch.fill(atlas, x0, y0, x1 - x0, y1 - y0, argb(*color));
-    }
 }
 
 #[cfg(target_os = "android")]
@@ -213,6 +213,7 @@ impl Game<'_> {
                     scroll: 0.0,
                     grab: Grab::None,
                     note: None,
+                    spin: 0.0,
                 });
             }
             Err(error) => {
@@ -229,7 +230,6 @@ impl Game<'_> {
     pub(super) fn close_skin_changer(&mut self) {
         self.skin_changer_ui.state = None;
         self.skin_changer_ui.error = None;
-        self.skin_changer_ui.preview_tried = false;
         if let Some(title) = &mut self.title {
             title.skin_stage = None;
         }
@@ -241,21 +241,29 @@ impl Game<'_> {
     }
 
     pub(super) fn sync_title_skin_preview(&mut self) {
-        if self.skin_changer_ui.preview_tried || self.title.is_none() {
+        if self.screen == Screen::SkinChanger {
             return;
         }
-        self.skin_changer_ui.preview_tried = true;
-        if Link::read(std::path::Path::new(".")).is_none() {
+        let Some(title) = &self.title else {
+            return;
+        };
+        if title.skin_stage.is_some() {
             return;
         }
-        let name = self.own_profile_name();
+        let ok = *self
+            .skin_changer_ui
+            .link_ok
+            .get_or_insert_with(|| Link::read(std::path::Path::new(".")).is_some());
+        if !ok {
+            return;
+        }
+        let name = self.options.player_name();
         if let Some(title) = &mut self.title {
             title.skin_stage = Some(name);
         }
     }
 
     pub(super) fn draw_title_player(&mut self, batch: &mut HudBatch, w: f32, h: f32) {
-        use horizon_client::mobs::{Mob, render};
         let Some(layout) = self
             .title
             .as_ref()
@@ -287,18 +295,67 @@ impl Game<'_> {
                 cape = Some(CAPE.to_owned());
             }
         }
-        let Some(kind) = self.res.player_type().clone() else {
-            return;
-        };
         let seconds = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0.0, |d| d.as_secs_f32());
+        let sway = if self.skin_changer_ui.title_grab.is_some() {
+            0.0
+        } else {
+            (seconds * 0.9).sin() * 24.0
+        };
+        let yaw = 180.0 + self.skin_changer_ui.title_spin + sway;
+        self.draw_model(
+            batch,
+            layout.model,
+            layout.model,
+            skin.as_deref(),
+            slim,
+            cape.as_deref(),
+            yaw,
+            1.0,
+        );
+    }
+
+    fn model_sprite(&mut self, name: &str, rgba: &[u8]) -> bool {
+        if !self.skin_slots.contains(name) || !self.gui.atlas.sprites.contains_key(name) {
+            self.store_skin(name.to_owned(), rgba.to_vec());
+        }
+        if self.gui.atlas.sprites.contains_key(name) {
+            self.skin_downloads.borrow_mut().drawn(name);
+            true
+        } else {
+            false
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn draw_model(
+        &mut self,
+        batch: &mut HudBatch,
+        rect: [f32; 4],
+        clip: [f32; 4],
+        skin: Option<&str>,
+        slim: bool,
+        cape: Option<&str>,
+        yaw: f32,
+        zoom: f32,
+    ) {
+        use horizon_client::mobs::{Mob, render};
+        const STEVE: &str = "entity/player/wide/steve";
+        let Some(kind) = self.res.player_type().clone() else {
+            return;
+        };
+        let skin = match skin {
+            Some(name) => Some(name.to_owned()),
+            None if self.gui.atlas.sprites.contains_key(STEVE) => Some(STEVE.to_owned()),
+            None => None,
+        };
         let mut m = Mob::new(0, kind, horizon_core::geometry::Vec3::ZERO, 0.0);
+        m.slim = slim && skin.is_some();
         m.skin = skin;
-        m.slim = slim;
-        m.cape = cape;
+        m.cape = cape.map(str::to_owned);
         m.extra.model_scale = 0.0;
-        m.body_yaw = 180.0 + (seconds * 0.9).sin() * 24.0;
+        m.body_yaw = yaw;
         m.head_yaw = m.body_yaw;
         m.head_pitch = 0.0;
         m.previous = m.position;
@@ -320,9 +377,9 @@ impl Game<'_> {
             &mut verts,
         );
         self.player_cape_geometry(&m, None, camera, 1.0, 240 | 240 << 8, &mut verts);
-        let [x0, y0, x1, y1] = layout.model;
-        let (cx, cy) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0);
-        let size = ((y1 - y0) * 0.94 / 1.8).min((x1 - x0) / 0.9);
+        let [x, y, rw, rh] = rect;
+        let (cx, cy) = (x + rw / 2.0, y + rh / 2.0);
+        let size = ((rh * 0.94 / 1.8).min(rw / 0.9) * zoom).max(1.0);
         let gui = glam::Mat4::from_translation(glam::Vec3::new(cx, cy, 0.0))
             * glam::Mat4::from_scale(glam::Vec3::new(size, size, -size))
             * glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.9 + 0.0625, 0.0))
@@ -332,8 +389,58 @@ impl Game<'_> {
         for (_, p, uv, color) in quads {
             batch.quad_3d(p, uv, color);
         }
-        batch.clip_since(start, x0, y0, x1, y1);
-        batch.depth_since(start, [x0, y0, x1, y1]);
+        batch.clip_since(
+            start,
+            clip[0],
+            clip[1],
+            clip[0] + clip[2],
+            clip[1] + clip[3],
+        );
+        batch.depth_since(start, [x, y, x + rw, y + rh]);
+    }
+
+    fn draw_model_job(&mut self, batch: &mut HudBatch, job: ModelJob) {
+        let skin = job
+            .skin
+            .as_ref()
+            .filter(|(name, pixels)| self.model_sprite(name, pixels))
+            .map(|(name, _)| name.as_str());
+        let cape = job
+            .cape
+            .as_ref()
+            .filter(|(name, pixels)| self.model_sprite(name, pixels))
+            .map(|(name, _)| name.as_str());
+        self.draw_model(
+            batch, job.rect, job.clip, skin, job.slim, cape, job.yaw, job.zoom,
+        );
+    }
+
+    pub(super) fn title_spin_press(&mut self) -> bool {
+        let (w, h) = self.gui_size();
+        let over = self
+            .title
+            .as_ref()
+            .filter(|t| {
+                t.skin_stage.is_some() && matches!(t.mode, horizon_client::title::Mode::Main)
+            })
+            .and_then(|_| horizon_client::title::skin_layout(w, h))
+            .is_some_and(|layout| inside(self.cursor, layout.model));
+        if over {
+            self.skin_changer_ui.title_grab = Some(self.cursor.0);
+        }
+        over
+    }
+
+    pub(super) fn title_spin_drag(&mut self) {
+        if let Some(last) = self.skin_changer_ui.title_grab {
+            self.skin_changer_ui.title_spin =
+                (self.skin_changer_ui.title_spin - (self.cursor.0 - last) * 1.2).rem_euclid(360.0);
+            self.skin_changer_ui.title_grab = Some(self.cursor.0);
+        }
+    }
+
+    pub(super) fn title_spin_release(&mut self) {
+        self.skin_changer_ui.title_grab = None;
     }
 
     fn publish_skin_changer(&mut self) {
@@ -421,6 +528,13 @@ impl Game<'_> {
             layout.view_height(),
         );
         state.scroll = state.scroll.clamp(0.0, limit);
+        let mut jobs: Vec<ModelJob> = Vec::new();
+        let grid_inner = [
+            layout.grid[0] + 1.0,
+            layout.grid[1] + 1.0,
+            layout.grid[2] - 2.0,
+            layout.grid[3] - 2.0,
+        ];
 
         frame(batch, atlas, layout.grid, PANEL, PANEL_EDGE);
         let first = batch.vertices.len();
@@ -443,17 +557,21 @@ impl Game<'_> {
             };
             let edge = if selected { 0xFFFF_FFFF } else { 0xFF2A_2A2A };
             frame(batch, atlas, rect, fill, edge);
-            let runs = state.changer.thumb(index);
-            draw_runs(
-                batch,
-                atlas,
-                &runs,
-                (
-                    rect[0] + (TILE[0] - 64.0 * THUMB_SCALE) / 2.0,
-                    rect[1] + 3.0,
-                ),
-                THUMB_SCALE,
-            );
+            let model_rect = [rect[0] + 3.0, rect[1] + 3.0, TILE[0] - 6.0, TILE[1] - 18.0];
+            let pixels = if index == 0 {
+                None
+            } else {
+                state.changer.tile_skin(index)
+            };
+            jobs.push(ModelJob {
+                rect: model_rect,
+                clip: overlap(model_rect, grid_inner),
+                slim: pixels.as_ref().is_some_and(|p| p.2),
+                skin: pixels.map(|(id, px, _)| (format!("changer/tile/{id}"), px)),
+                cape: None,
+                yaw: 200.0,
+                zoom: 1.0,
+            });
             let name = fit(atlas, state.changer.title(index), TILE[0] - 6.0);
             let nw = atlas.font.width_text(&name);
             batch.text_styled(
@@ -498,27 +616,29 @@ impl Game<'_> {
 
         frame(batch, atlas, layout.side, PANEL, PANEL_EDGE);
         frame(batch, atlas, layout.stage, 0x6000_0000, 0xFF2A_2A2A);
-        let runs = state.changer.stage();
-        let scale = ((layout.stage[2] - 4.0) / 160.0).min((layout.stage[3] - 16.0) / 240.0);
-        let (sw, sh) = (160.0 * scale, 240.0 * scale);
-        let first = batch.vertices.len();
-        draw_runs(
-            batch,
-            atlas,
-            &runs,
-            (
-                (layout.stage[0] + (layout.stage[2] - sw) / 2.0).floor(),
-                (layout.stage[1] + 2.0 + (layout.stage[3] - 16.0 - sh) / 2.0).floor(),
-            ),
-            scale,
-        );
-        batch.clip_since(
-            first,
+        let stage_rect = [
             layout.stage[0] + 1.0,
-            layout.stage[1] + 1.0,
-            layout.stage[0] + layout.stage[2] - 1.0,
-            layout.stage[1] + layout.stage[3] - 1.0,
-        );
+            layout.stage[1] + 16.0,
+            layout.stage[2] - 2.0,
+            (layout.stage[3] - 30.0).max(10.0),
+        ];
+        let selected_pixels = if state.changer.selected == 0 {
+            None
+        } else {
+            state.changer.tile_skin(state.changer.selected)
+        };
+        jobs.push(ModelJob {
+            rect: stage_rect,
+            clip: stage_rect,
+            slim: selected_pixels.as_ref().is_some_and(|p| p.2),
+            skin: selected_pixels.map(|(id, px, _)| (format!("changer/tile/{id}"), px)),
+            cape: state
+                .changer
+                .stage_cape()
+                .map(|(id, px)| (format!("capes/changer/{id}"), px)),
+            yaw: 200.0 + state.spin,
+            zoom: state.changer.camera.zoom,
+        });
         let selected_name = fit(
             atlas,
             state.changer.title(state.changer.selected),
@@ -593,6 +713,9 @@ impl Game<'_> {
             true,
             inside(cursor, layout.done),
         );
+        for job in jobs {
+            self.draw_model_job(batch, job);
+        }
     }
 
     pub(super) fn skin_changer_mouse(&mut self, pressed: bool) {
@@ -688,10 +811,7 @@ impl Game<'_> {
         };
         match state.grab {
             Grab::Stage { last } => {
-                state
-                    .changer
-                    .camera
-                    .drag((cursor.0 - last.0) * 1.5, (cursor.1 - last.1) * 1.5);
+                state.spin = (state.spin - (cursor.0 - last.0) * 1.2).rem_euclid(360.0);
                 state.grab = Grab::Stage { last: cursor };
             }
             Grab::Grid {
@@ -751,6 +871,11 @@ impl Game<'_> {
     pub(super) fn skin_changer_scroll(&mut self, _delta: f32) {}
     pub(super) fn open_skin_changer(&mut self) {}
     pub(super) fn sync_title_skin_preview(&mut self) {}
+    pub(super) fn title_spin_press(&mut self) -> bool {
+        false
+    }
+    pub(super) fn title_spin_drag(&mut self) {}
+    pub(super) fn title_spin_release(&mut self) {}
     pub(super) fn draw_title_player(
         &mut self,
         _batch: &mut horizon_client::hud::HudBatch,

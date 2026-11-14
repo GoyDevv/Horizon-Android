@@ -200,6 +200,7 @@ pub struct Changer {
     pub selected: usize,
     thumbs: HashMap<(String, bool), Runs>,
     stage: Option<(StageKey, Runs)>,
+    pixels: HashMap<String, Arc<Vec<u8>>>,
 }
 
 impl Changer {
@@ -218,6 +219,7 @@ impl Changer {
             selected: 0,
             thumbs: HashMap::new(),
             stage: None,
+            pixels: HashMap::new(),
         };
         value.selected = value.active();
         Ok(value)
@@ -227,6 +229,7 @@ impl Changer {
         let id = self.entry(self.selected).map(|e| e.id.clone());
         self.library = Library::load(&self.root)?;
         self.thumbs.clear();
+        self.pixels.clear();
         self.stage = None;
         self.selected = id
             .and_then(|id| self.skins().position(|e| e.id == id))
@@ -336,6 +339,45 @@ impl Changer {
             .and_then(|path| read_file(&path).ok())
             .and_then(|bytes| read_skin(&bytes).ok())
             .unwrap_or_else(|| self.fallback.clone())
+    }
+
+    pub fn tile_skin(&mut self, index: usize) -> Option<(String, Arc<Vec<u8>>, bool)> {
+        let id = self.entry(index)?.id.clone();
+        let slim = self.model_of(index) == Model::Slim;
+        if let Some(found) = self.pixels.get(&id) {
+            return Some((id, found.clone(), slim));
+        }
+        let image = self.skin_image(index);
+        let bytes = horizon_core::player_texture::process_legacy_skin(
+            image.width(),
+            image.height(),
+            image.as_raw(),
+        )?;
+        let bytes = Arc::new(bytes);
+        self.pixels.insert(id.clone(), bytes.clone());
+        Some((id, bytes, slim))
+    }
+
+    pub fn stage_cape(&mut self) -> Option<(String, Arc<Vec<u8>>)> {
+        let id = self
+            .library
+            .selections
+            .get(&self.key)
+            .filter(|s| !s.hide_cape)
+            .and_then(|s| s.cape.clone())?;
+        let key = format!("cape:{id}");
+        if let Some(found) = self.pixels.get(&key) {
+            return Some((id, found.clone()));
+        }
+        let path = Library::image(&self.root, &id).ok()?;
+        let image = read_cape(&read_file(&path).ok()?).ok()?;
+        let bytes = Arc::new(horizon_core::player_texture::process_cape(
+            image.width(),
+            image.height(),
+            image.as_raw(),
+        )?);
+        self.pixels.insert(key, bytes.clone());
+        Some((id, bytes))
     }
 
     pub fn thumb(&mut self, index: usize) -> Runs {
@@ -679,5 +721,42 @@ mod tests {
             with.iter()
                 .all(|(r, _)| r[0] + r[2] <= THUMB[0] as f32 && r[1] + r[3] <= THUMB[1] as f32)
         );
+    }
+
+    #[test]
+    fn engine_pixels_are_full_skins_with_each_skins_own_model() {
+        let root = scratch("pixels");
+        let (mut changer, _) = changer(&root);
+        assert!(changer.tile_skin(0).is_none());
+        let (id, pixels, slim) = changer.tile_skin(1).unwrap();
+        assert_eq!(pixels.len(), 64 * 64 * 4);
+        assert_eq!(&pixels[..4], &[200, 30, 30, 255]);
+        assert!(!slim);
+        changer.select_tile(1);
+        changer.toggle_model().unwrap();
+        let (again, same, slim) = changer.tile_skin(1).unwrap();
+        assert_eq!(again, id);
+        assert!(slim);
+        assert!(Arc::ptr_eq(&pixels, &same));
+        assert!(!changer.tile_skin(2).unwrap().2);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn an_older_64x32_skin_is_laid_out_as_a_full_skin_for_the_engine() {
+        let root = scratch("legacy");
+        let mut library = Library::default();
+        let mut out = std::io::Cursor::new(vec![]);
+        RgbaImage::from_pixel(64, 32, image::Rgba([9, 99, 199, 255]))
+            .write_to(&mut out, image::ImageFormat::Png)
+            .unwrap();
+        library
+            .import(&root, "Old", Kind::Skin, &out.into_inner())
+            .unwrap();
+        let mut changer = Changer::new(&root, "offline:me", None).unwrap();
+        let (_, pixels, _) = changer.tile_skin(1).unwrap();
+        assert_eq!(pixels.len(), 64 * 64 * 4);
+        assert_eq!(&pixels[..4], &[9, 99, 199, 255]);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
