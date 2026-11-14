@@ -744,13 +744,15 @@ impl Game<'_> {
                     description,
                 } => {
                     let cur_style = self.pad.touch.settings.control_style;
-                    if let Ok(meta) = horizon_client::touch::Settings::copy_or_replace_preset_by_name(
-                        std::path::Path::new("."),
-                        cur_style,
-                        &source_id,
-                        &name,
-                        &description,
-                    ) {
+                    if let Ok(meta) =
+                        horizon_client::touch::Settings::copy_or_replace_preset_by_name(
+                            std::path::Path::new("."),
+                            cur_style,
+                            &source_id,
+                            &name,
+                            &description,
+                        )
+                    {
                         self.pad.touch.settings.select_preset(
                             std::path::Path::new("."),
                             cur_style,
@@ -1275,7 +1277,8 @@ impl Game<'_> {
                     continue;
                 }
             }
-            if horizon_client::touch_ui::apply_editor_button_label_output(&mut self.pad.touch, &out) {
+            if horizon_client::touch_ui::apply_editor_button_label_output(&mut self.pad.touch, &out)
+            {
                 self.settings.touch = self.pad.touch.settings.clone();
                 if horizon_client::touch_ui::output_dismisses(&out) {
                     crate::platform::hide();
@@ -1409,6 +1412,9 @@ impl Game<'_> {
         let p = [t.location.x as f32 / b.scale, t.location.y as f32 / b.scale];
         if t.phase == TouchPhase::Started && self.screen == Screen::Options {
             self.ui.options.touch_start();
+        }
+        if t.phase == TouchPhase::Started && self.rotate_zone_at((p[0], p[1])) {
+            self.pad.touch_ui.hold_pointer(t.id);
         }
         let direct = self.pad.touch_ui.direct_pointer(t.id, p, t.phase);
         self.handle_window_event(

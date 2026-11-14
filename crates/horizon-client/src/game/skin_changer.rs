@@ -292,12 +292,7 @@ impl Game<'_> {
         let seconds = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0.0, |d| d.as_secs_f32());
-        let sway = if self.skin_changer_ui.title_grab.is_some() {
-            0.0
-        } else {
-            (seconds * 0.9).sin() * 24.0
-        };
-        let yaw = 180.0 + self.skin_changer_ui.title_spin + sway;
+        let yaw = 25.0 + self.skin_changer_ui.title_spin;
         let [x0, y0, x1, y1] = layout.model;
         let model = [x0, y0, x1 - x0, y1 - y0];
         self.draw_model(
@@ -351,8 +346,13 @@ impl Game<'_> {
         m.skin = skin;
         m.cape = cape.map(str::to_owned);
         m.extra.model_scale = 0.0;
-        m.body_yaw = yaw;
-        m.head_yaw = m.body_yaw;
+        let seconds = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0.0, |d| d.as_secs_f32());
+        let look = (8.0 * (seconds * 0.45).sin() / 40.0).atan();
+        m.age = (seconds * 20.0) as u32;
+        m.body_yaw = 180.0 + look * 20.0 + yaw;
+        m.head_yaw = m.body_yaw + look * 20.0;
         m.head_pitch = 0.0;
         m.previous = m.position;
         m.previous_body_yaw = m.body_yaw;
@@ -411,6 +411,23 @@ impl Game<'_> {
         );
     }
 
+    pub(super) fn rotate_zone_at(&self, p: (f32, f32)) -> bool {
+        let (w, h) = self.gui_size();
+        if self.screen == Screen::SkinChanger {
+            return self.skin_changer_ui.state.is_some() && inside(p, Layout::new(w, h).stage);
+        }
+        self.title
+            .as_ref()
+            .filter(|t| {
+                t.skin_stage.is_some() && matches!(t.mode, horizon_client::title::Mode::Main)
+            })
+            .and_then(|_| horizon_client::title::skin_layout(w, h))
+            .is_some_and(|layout| {
+                let [x0, y0, x1, y1] = layout.model;
+                inside(p, [x0, y0, x1 - x0, y1 - y0])
+            })
+    }
+
     pub(super) fn title_spin_press(&mut self) -> bool {
         let (w, h) = self.gui_size();
         let over = self
@@ -433,7 +450,7 @@ impl Game<'_> {
     pub(super) fn title_spin_drag(&mut self) {
         if let Some(last) = self.skin_changer_ui.title_grab {
             self.skin_changer_ui.title_spin =
-                (self.skin_changer_ui.title_spin - (self.cursor.0 - last) * 1.2).rem_euclid(360.0);
+                (self.skin_changer_ui.title_spin - (self.cursor.0 - last) * 2.0).rem_euclid(360.0);
             self.skin_changer_ui.title_grab = Some(self.cursor.0);
         }
     }
@@ -568,7 +585,7 @@ impl Game<'_> {
                 slim: pixels.as_ref().is_some_and(|p| p.2),
                 skin: pixels.map(|(id, px, _)| (format!("changer/tile/{id}"), px)),
                 cape: None,
-                yaw: 200.0,
+                yaw: 25.0,
                 zoom: 1.0,
             });
             let name = fit(atlas, state.changer.title(index), TILE[0] - 6.0);
@@ -635,7 +652,7 @@ impl Game<'_> {
                 .changer
                 .stage_cape()
                 .map(|(id, px)| (format!("capes/changer/{id}"), px)),
-            yaw: 200.0 + state.spin,
+            yaw: 25.0 + state.spin,
             zoom: 1.0,
         });
         let selected_name = fit(
@@ -800,7 +817,7 @@ impl Game<'_> {
         };
         match state.grab {
             Grab::Stage { last } => {
-                state.spin = (state.spin - (cursor.0 - last.0) * 1.2).rem_euclid(360.0);
+                state.spin = (state.spin - (cursor.0 - last.0) * 2.0).rem_euclid(360.0);
                 state.grab = Grab::Stage { last: cursor };
             }
             Grab::Grid {
@@ -864,6 +881,9 @@ impl Game<'_> {
         false
     }
     pub(super) fn title_spin_drag(&mut self) {}
+    pub(super) fn rotate_zone_at(&self, _p: (f32, f32)) -> bool {
+        false
+    }
     pub(super) fn title_spin_release(&mut self) {}
     pub(super) fn draw_title_player(
         &mut self,
