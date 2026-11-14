@@ -8092,6 +8092,11 @@ impl Game<'_> {
             self.draw_mod_screen(&mut batch);
             return batch;
         }
+        if self.screen == Screen::SkinChanger && self.title.is_some() {
+            self.draw_skin_changer(&mut batch);
+            return batch;
+        }
+        self.sync_title_skin_preview();
         if let Some(title) = &mut self.title {
             title.poll_backup();
             if std::mem::take(&mut title.onboarding_finished) {
@@ -11533,6 +11538,7 @@ impl Game<'_> {
             // A splitscreen player's title never ends the process (P1's does).
             Action::Quit if self.options.split_guest => {}
             Action::Quit => crate::game::exit_app(event_loop),
+            Action::SkinChanger => self.open_skin_changer(),
             Action::Options => self.open_options(true),
             Action::Accessibility => {
                 self.open_options_at(true, horizon_client::options_ui::Page::Accessibility)
@@ -15602,7 +15608,10 @@ impl Game<'_> {
             || self.remote_loading();
         let blurred = loading
             || self.title.as_ref().is_some_and(|t| {
-                matches!(self.screen, Screen::Options | Screen::Mod | Screen::Win)
+                matches!(
+                    self.screen,
+                    Screen::Options | Screen::Mod | Screen::SkinChanger | Screen::Win
+                )
                     || !matches!(t.mode, horizon_client::title::Mode::Main)
             })
             || (self.title.is_none()
@@ -17556,6 +17565,13 @@ impl Game<'_> {
                 }
                 WindowEvent::MouseInput { .. } if self.screen == Screen::Win => {}
                 WindowEvent::MouseInput { state, button, .. }
+                    if self.screen == Screen::SkinChanger && self.title.is_some() =>
+                {
+                    if button == MouseButton::Left {
+                        self.skin_changer_mouse(state == ElementState::Pressed);
+                    }
+                }
+                WindowEvent::MouseInput { state, button, .. }
                     if self.screen == Screen::Mod && self.title.is_some() =>
                 {
                     if state == ElementState::Pressed {
@@ -17929,7 +17945,8 @@ impl Game<'_> {
                 }
                 // A mod's settings page at the title takes its keys like Options.
                 WindowEvent::KeyboardInput { event, .. }
-                    if self.screen == Screen::Mod && self.title.is_some() =>
+                    if matches!(self.screen, Screen::Mod | Screen::SkinChanger)
+                        && self.title.is_some() =>
                 {
                     if event.state == ElementState::Pressed
                         && let PhysicalKey::Code(key) = event.physical_key

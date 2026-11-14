@@ -1821,3 +1821,33 @@ fn a_finished_optimization_stamps_the_level_data() {
     let version = root.get("Data").and_then(|d| d.get("DataVersion"));
     assert!(matches!(version, Some(Tag::Int(v)) if *v == horizon_world::DATA_VERSION));
 }
+
+#[test]
+fn the_main_menu_offers_the_skin_changer_only_beside_a_preview_that_fits() {
+    let mut f = Fixture::new();
+    let ids = |f: &Fixture, w: f32| -> Vec<u8> {
+        f.title.buttons(w, 262.0).iter().map(|b| b.id).collect()
+    };
+    assert!(!ids(&f, 480.0).contains(&20));
+    f.title.skin_preview = Some(std::sync::Arc::new(vec![(
+        [0.0, 0.0, 1.0, 1.0],
+        [1, 2, 3, 255],
+    )]));
+    let buttons = f.title.buttons(480.0, 262.0);
+    let skin = buttons.iter().find(|b| b.id == 20).expect("skin button");
+    let singleplayer = buttons.iter().find(|b| b.id == 1).unwrap();
+    assert!(
+        skin.x + skin.w <= singleplayer.x,
+        "beside the menu, not over it"
+    );
+    assert!(
+        skin.y > singleplayer.y,
+        "below the preview, which starts at the menu's top"
+    );
+    assert!(skin.x >= 0.0);
+    assert!(
+        !ids(&f, 320.0).contains(&20),
+        "no room beside the menu at 320 wide"
+    );
+    assert!(matches!(f.title.mode, Mode::Main));
+}

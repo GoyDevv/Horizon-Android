@@ -781,6 +781,7 @@ impl Loading {
         }
         match action {
             Action::Quit => crate::game::exit_app(event_loop),
+            Action::SkinChanger => {}
             Action::Options => self.open_menu_options(Page::Main),
             Action::Accessibility => self.open_menu_options(Page::Accessibility),
             Action::Language => self.open_menu_options(Page::Language),

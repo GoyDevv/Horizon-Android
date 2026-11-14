@@ -17,6 +17,10 @@ pub(super) struct SkinChangerUi {
     state: Option<State>,
     #[cfg(target_os = "android")]
     error: Option<String>,
+    #[cfg(target_os = "android")]
+    from_title: bool,
+    #[cfg(target_os = "android")]
+    preview_tried: bool,
 }
 
 #[cfg(target_os = "android")]
@@ -218,13 +222,35 @@ impl Game<'_> {
             }
         }
         self.dragging = false;
+        self.skin_changer_ui.from_title = self.title.is_some();
         self.screen = Screen::SkinChanger;
     }
 
     pub(super) fn close_skin_changer(&mut self) {
         self.skin_changer_ui.state = None;
         self.skin_changer_ui.error = None;
-        self.screen = Screen::Options;
+        self.skin_changer_ui.preview_tried = false;
+        if let Some(title) = &mut self.title {
+            title.skin_preview = None;
+        }
+        self.screen = if self.skin_changer_ui.from_title {
+            Screen::Playing
+        } else {
+            Screen::Options
+        };
+    }
+
+    pub(super) fn sync_title_skin_preview(&mut self) {
+        let Some(title) = &mut self.title else {
+            return;
+        };
+        if title.skin_preview.is_some() || self.skin_changer_ui.preview_tried {
+            return;
+        }
+        self.skin_changer_ui.preview_tried = true;
+        title.skin_preview = Link::read(std::path::Path::new("."))
+            .and_then(|link| link.changer().ok())
+            .map(|mut changer| changer.stage());
     }
 
     fn publish_skin_changer(&mut self) {
@@ -640,6 +666,8 @@ impl Game<'_> {
     pub(super) fn skin_changer_mouse(&mut self, _pressed: bool) {}
     pub(super) fn skin_changer_drag(&mut self) {}
     pub(super) fn skin_changer_scroll(&mut self, _delta: f32) {}
+    pub(super) fn open_skin_changer(&mut self) {}
+    pub(super) fn sync_title_skin_preview(&mut self) {}
     pub(super) fn close_skin_changer(&mut self) {
         self.screen = super::Screen::Options;
     }

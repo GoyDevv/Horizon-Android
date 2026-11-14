@@ -350,6 +350,7 @@ pub enum Mode {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Action {
     None,
+    SkinChanger,
     Quit,
     Options,
     Accessibility,
@@ -382,8 +383,11 @@ pub enum Action {
         selected: Vec<String>,
     },
 }
+pub type SkinPreview = std::sync::Arc<Vec<([f32; 4], [u8; 4])>>;
+
 pub struct Title {
     pub mode: Mode,
+    pub skin_preview: Option<SkinPreview>,
     /// Direct Connection's address, synchronized with `options.txt`'s `lastServer`.
     pub last_server: String,
     /// `skipMultiplayerWarning`, synchronized with `options.txt` the same way.
@@ -660,6 +664,12 @@ fn version_label() -> String {
     format!("Horizon {} (Rust)", horizon_core::VANILLA_VERSION)
 }
 
+const SKIN_BOX: [f32; 2] = [80.0, 100.0];
+fn skin_box(w: f32, h: f32) -> (f32, f32) {
+    let cx = (w / 2.0).floor();
+    (cx - 100.0 - 8.0 - SKIN_BOX[0], (h / 4.0).floor() + 48.0)
+}
+
 impl Title {
     /// Names the player for the `<NAME> IS YOU` splash; `name` is only asked for when that splash was rolled.
     pub fn with_user(mut self, name: impl FnOnce() -> String) -> Self {
@@ -687,6 +697,7 @@ impl Title {
         let now = std::time::Instant::now();
         Self {
             mode,
+            skin_preview: None,
             last_server: String::new(),
             skip_multiplayer_warning: false,
             saves,
@@ -1654,6 +1665,10 @@ impl Title {
                     button.icon = Some((icon, 15.0));
                     buttons.push(button);
                 }
+                if self.skin_preview.is_some() && cx - 100.0 >= SKIN_BOX[0] + 12.0 {
+                    let (x, y) = skin_box(w, h);
+                    buttons.push(b(x, y + SKIN_BOX[1] + 4.0, SKIN_BOX[0], "Skin Changer", true, 20));
+                }
                 buttons
             }
             Mode::Select { worlds, selected } => {
@@ -2314,6 +2329,29 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
         match &self.mode {
             Mode::Main => {
                 draw_logo(atlas, batch, w);
+                if let Some(runs) = &self.skin_preview
+                    && (w / 2.0).floor() - 100.0 >= SKIN_BOX[0] + 12.0
+                {
+                    let (x, y) = skin_box(w, h);
+                    batch.fill(atlas, x - 1.0, y - 1.0, SKIN_BOX[0] + 2.0, SKIN_BOX[1] + 2.0, 0xFF3A_3A3A);
+                    batch.fill(atlas, x, y, SKIN_BOX[0], SKIN_BOX[1], 0x8C00_0000);
+                    let scale = ((SKIN_BOX[0] - 4.0) / 160.0).min((SKIN_BOX[1] - 4.0) / 240.0);
+                    let (ox, oy) = (
+                        (x + (SKIN_BOX[0] - 160.0 * scale) / 2.0).floor(),
+                        (y + (SKIN_BOX[1] - 240.0 * scale) / 2.0).floor(),
+                    );
+                    for (r, c) in runs.iter() {
+                        let x0 = (ox + r[0] * scale).floor();
+                        let y0 = (oy + r[1] * scale).floor();
+                        let x1 = (ox + (r[0] + r[2]) * scale).ceil();
+                        let y1 = (oy + (r[1] + r[3]) * scale).ceil();
+                        let color = (u32::from(c[3]) << 24)
+                            | (u32::from(c[0]) << 16)
+                            | (u32::from(c[1]) << 8)
+                            | u32::from(c[2]);
+                        batch.fill(atlas, x0, y0, x1 - x0, y1 - y0, color);
+                    }
+                }
                 if !hide_splash && let Some(splash) = self.splash.as_deref() {
                     let tw = HudBatch::text_width(atlas, splash);
                     let start = batch.vertices.len();
@@ -3248,6 +3286,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                 self.onboarding_close();
                 Action::None
             }
+            (Mode::Main, Some(20)) => Action::SkinChanger,
             (Mode::Main, Some(3)) => Action::Options,
             (Mode::Main, Some(7)) => Action::Accessibility,
             (Mode::Main, Some(6)) => Action::Language,
