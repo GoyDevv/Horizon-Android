@@ -759,7 +759,7 @@ class LauncherOverhaulTests(unittest.TestCase):
 
         # 5. Homepage shows selected Renderer mode and downloaded version Changelogs
         self.assertIn("Renderer: {}", launcher_pages)
-        self.assertIn("CHANGELOG — MINECRAFT 26.3 • HORIZON ANDROID", launcher_pages)
+        self.assertNotIn("CHANGELOG — MINECRAFT 26.3", launcher_pages)
 
         # 6. Duplicate control preset name confirmation dialog (Save to replace or Cancel)
         self.assertIn("pub duplicate_name_confirm_open: bool,", editor)
@@ -1393,11 +1393,14 @@ class LauncherOverhaulTests(unittest.TestCase):
         self.assertIn("fn resolve_and_port_modrinth_deps_recursive(", cat_rs)
         self.assertIn('.join("checks-1")', cat_rs)
 
-        # 3. Verify Jetpack Compose Material You Dashboard (Hero Split Button, 2-Column Bento Grid, Single Discord/GitHub, Stadium Nav Rail)
+        # 3. Verify Jetpack Compose Material You Dashboard (Hero Split Button, mods summary card, Stadium Nav Rail)
         lp_rs = _read_repo_file("crates/horizon-client/src/android/launcher_pages.rs")
         self.assertIn("ui.m3_tonal_card(content_x, card_y, content_w, hero_h, 18.0, true);", lp_rs)
-        self.assertIn('"Horizon Mod Engine"', lp_rs)
-        self.assertIn('"Installed Mods"', lp_rs)
+        self.assertIn('"{n} mods loaded"', lp_rs)
+        self.assertNotIn("Horizon Mod Engine", lp_rs)
+        self.assertNotIn("Action::Discord", lp_rs)
+        self.assertNotIn("Action::Repository", lp_rs)
+        self.assertNotIn("RELEASE HIGHLIGHTS", lp_rs)
         self.assertIn('"Browse Mods"', lp_rs)
         self.assertIn('"Build Native .so"', lp_rs)
 

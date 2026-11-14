@@ -292,9 +292,6 @@ pub fn cache_dir() -> Option<std::path::PathBuf> {
     })
 }
 
-pub fn open_repository() -> bool {
-    open_url("https://github.com/GoyDevv/Horizon-Android")
-}
 /// Browse our SAF directory through the system file manager, never a private path.
 pub fn open_documents(id: &str) -> bool {
     with_context(|env, activity| {
@@ -330,36 +327,6 @@ pub fn open_documents(id: &str) -> bool {
             "addFlags",
             "(I)Landroid/content/Intent;",
             &[JValue::Int(3)],
-        )?;
-        env.call_method(
-            activity,
-            "startActivity",
-            "(Landroid/content/Intent;)V",
-            &[JValue::Object(&intent)],
-        )?;
-        Ok(())
-    })
-    .is_some()
-}
-pub fn open_url(url: &str) -> bool {
-    if !url.starts_with("https://") && !url.starts_with("http://") {
-        return false;
-    }
-    with_context(|env, activity| {
-        let address = JObject::from(env.new_string(url)?);
-        let uri = env
-            .call_static_method(
-                "android/net/Uri",
-                "parse",
-                "(Ljava/lang/String;)Landroid/net/Uri;",
-                &[JValue::Object(&address)],
-            )?
-            .l()?;
-        let action = JObject::from(env.new_string("android.intent.action.VIEW")?);
-        let intent = env.new_object(
-            "android/content/Intent",
-            "(Ljava/lang/String;Landroid/net/Uri;)V",
-            &[JValue::Object(&action), JValue::Object(&uri)],
         )?;
         env.call_method(
             activity,
@@ -761,7 +728,10 @@ pub fn apply_high_refresh_rate(preferred_hz: u16) {
             &cls,
             "applyHighRefreshRate",
             "(Landroid/app/Activity;I)V",
-            &[JValue::Object(activity), JValue::Int(i32::from(preferred_hz))],
+            &[
+                JValue::Object(activity),
+                JValue::Int(i32::from(preferred_hz)),
+            ],
         )?;
         Ok(())
     });

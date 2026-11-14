@@ -325,8 +325,6 @@ pub(super) enum Action {
     CopyLoginCode,
     CancelLogin,
     ReviewApp,
-    Repository,
-    Discord,
     SignOut,
     LoginLink,
     CloseLogin,
@@ -1778,219 +1776,96 @@ impl Launcher {
                     chip_x += cw_chip + 8.0;
                 }
 
-                // 2. Jetpack Compose Material You 2-Column Bento Grid:
-                //    Left Bento Card: What's New in 26.3 + integrated Discord & GitHub tonal pills
-                //    Right Bento Card: Mod Loader & Compiler Engine live status + quick actions
-                let bento_gap = 10.0;
-                let has_two_cols = content_w >= 460.0;
-                let left_w = if has_two_cols {
-                    ((content_w - bento_gap) * 0.58).floor()
-                } else {
-                    content_w
+                let active_mods = self
+                    .catalog
+                    .local
+                    .iter()
+                    .filter(|i| i.kind == horizon_client::content_files::Kind::Mods && i.enabled)
+                    .count()
+                    + self.catalog.bundled_enabled.len();
+                let active_shaders = self
+                    .catalog
+                    .local
+                    .iter()
+                    .filter(|i| i.kind == horizon_client::content_files::Kind::Shaders && i.enabled)
+                    .count();
+                let mods_h = 76.0;
+                let mods_y = bento_y;
+                ui.m3_tonal_card(content_x, mods_y, content_w, mods_h, 16.0, false);
+                ui.rounded(
+                    content_x + 14.0,
+                    mods_y + 24.0,
+                    28.0,
+                    28.0,
+                    8.0,
+                    my3_accent_soft(),
+                );
+                ui.icon(
+                    Icon::Mods,
+                    content_x + 20.0,
+                    mods_y + 30.0,
+                    16.0,
+                    my3_accent(),
+                );
+                let buttons_w = if content_w >= 400.0 { 232.0 } else { 118.0 };
+                let text_w = (content_w - 62.0 - buttons_w - 14.0).max(80.0);
+                let headline = match active_mods {
+                    0 => "No mods loaded".to_owned(),
+                    1 => "1 mod loaded".to_owned(),
+                    n => format!("{n} mods loaded"),
                 };
-                let right_w = if has_two_cols {
-                    content_w - left_w - bento_gap
-                } else {
-                    0.0
-                };
-
-                ui.m3_tonal_card(content_x, bento_y, left_w, bento_h, 16.0, false);
-                let ver_header = if let Some(ref info) = self.catalog.update_info {
-                    format!(
-                        "CHANGELOG — MINECRAFT 26.3 • HORIZON ANDROID v{} (DOWNLOADED)",
-                        info.version
-                    )
-                } else if installed {
-                    format!(
-                        "CHANGELOG — MINECRAFT 26.3 • HORIZON ANDROID v{} (DOWNLOADED)",
-                        crate::updater::CURRENT_VERSION
-                    )
-                } else {
-                    "RELEASE HIGHLIGHTS — MINECRAFT 26.3 • HORIZON ANDROID".to_owned()
-                };
-                let fit_vh = ui.fit_text(Face::SemiBold, 10.8, &ver_header, left_w - 28.0);
+                let headline = ui.fit_text(Face::SemiBold, 14.0, &headline, text_w);
                 ui.text(
                     Face::SemiBold,
-                    10.8,
-                    content_x + 14.0,
-                    bento_y + 10.0,
-                    my3_accent(),
-                    &fit_vh,
+                    14.0,
+                    content_x + 52.0,
+                    mods_y + 21.0,
+                    my3_text(),
+                    &headline,
                 );
-
-                let changelog_lines: Vec<String> = if let Some(ref info) = self.catalog.update_info
-                    && !info.changelog.trim().is_empty()
-                {
-                    info.changelog
-                        .lines()
-                        .map(str::trim)
-                        .filter(|l| !l.is_empty())
-                        .take(3)
-                        .map(|l| {
-                            if l.starts_with('•') || l.starts_with('-') || l.starts_with('*') {
-                                format!("• {}", l.trim_start_matches(['•', '-', '*', ' ']))
-                            } else {
-                                format!("• {l}")
-                            }
-                        })
-                        .collect()
-                } else if installed {
-                    vec![
-                        "• Uncapped Max FPS (260 FPS) with Vulkan non-blocking swapchain & 120Hz+ display".into(),
-                        "• Native horizon-port-pack compiler (.jar -> .hmod + .hnmod) & Modrinth auto-port".into(),
-                        "• Google Sans typography, Jetpack Compose Material You UI & GoyControl snap-grid".into(),
-                    ]
-                } else {
-                    vec![
-                        "• Downloads official Minecraft 26.3 assets directly from Mojang with 6-step verification".into(),
-                        "• Hardware Vulkan GPU batching, Vulkan compatibility & experimental OpenGL ES rendering".into(),
-                        "• Full MCPE & GoyControl touch studio with file manager import/export & Microsoft sign-in".into(),
-                    ]
-                };
-                let max_lines = ((bento_h - 64.0) / 18.0).floor().clamp(1.0, 3.0) as usize;
-                for (index, line) in changelog_lines.iter().take(max_lines).enumerate() {
-                    let fitted = ui.fit_text(Face::Regular, 11.8, line, (left_w - 28.0).max(80.0));
+                if active_shaders > 0 {
+                    let shaders = ui.fit_text(
+                        Face::Regular,
+                        11.0,
+                        &format!("{active_shaders} shader pack active"),
+                        text_w,
+                    );
                     ui.text(
                         Face::Regular,
-                        11.8,
-                        content_x + 14.0,
-                        bento_y + 29.0 + index as f32 * 18.0,
-                        my3_text(),
-                        &fitted,
+                        11.0,
+                        content_x + 52.0,
+                        mods_y + 41.0,
+                        my3_muted(),
+                        &shaders,
                     );
                 }
-
-                // Single integrated Community Tonal Pill Row inside Left Bento Card (no duplicate Discord!)
-                let comm_y = bento_y + bento_h - 36.0;
-                button(
-                    &mut ui,
-                    &mut self.targets,
-                    [content_x + 14.0, comm_y, 92.0, 26.0],
-                    "Discord",
-                    Action::Discord,
-                    false,
-                );
-                button(
-                    &mut ui,
-                    &mut self.targets,
-                    [content_x + 112.0, comm_y, 92.0, 26.0],
-                    "GitHub",
-                    Action::Repository,
-                    false,
-                );
-
-                // Right Bento Card: Mod Loader & Native Compiler Telemetry
-                if has_two_cols && right_w > 140.0 {
-                    let rx = content_x + left_w + bento_gap;
-                    ui.m3_tonal_card(rx, bento_y, right_w, bento_h, 16.0, false);
-                    ui.rounded(
-                        rx + 14.0,
-                        bento_y + 10.0,
-                        28.0,
-                        28.0,
-                        8.0,
-                        my3_accent_soft(),
-                    );
-                    ui.icon(
-                        Icon::Terminal,
-                        rx + 20.0,
-                        bento_y + 16.0,
-                        16.0,
-                        my3_accent(),
-                    );
-                    let rt_hdr =
-                        ui.fit_text(Face::SemiBold, 12.5, "Horizon Mod Engine", right_w - 54.0);
-                    ui.text(
-                        Face::SemiBold,
-                        12.5,
-                        rx + 48.0,
-                        bento_y + 10.0,
-                        my3_text(),
-                        &rt_hdr,
-                    );
-                    let rt_sub = ui.fit_text(
-                        Face::Regular,
-                        10.5,
-                        "Official Horizon Mods • In-Process Engine",
-                        right_w - 54.0,
-                    );
-                    ui.text(
-                        Face::Regular,
-                        10.5,
-                        rx + 48.0,
-                        bento_y + 25.0,
-                        my3_accent(),
-                        &rt_sub,
-                    );
-
-                    let active_mods = self
-                        .catalog
-                        .local
-                        .iter()
-                        .filter(|i| {
-                            i.kind == horizon_client::content_files::Kind::Mods && i.enabled
-                        })
-                        .count()
-                        + self.catalog.bundled_enabled.len();
-                    let active_shaders = self
-                        .catalog
-                        .local
-                        .iter()
-                        .filter(|i| {
-                            i.kind == horizon_client::content_files::Kind::Shaders && i.enabled
-                        })
-                        .count();
-                    let stat1 = ui.fit_text(
-                        Face::Medium,
-                        11.2,
-                        &format!("• Active Profile Mods: {active_mods} enabled (.hnmod / .hmod)"),
-                        right_w - 28.0,
-                    );
-                    let stat2 = ui.fit_text(
-                        Face::Medium,
-                        11.2,
-                        &format!(
-                            "• Shaders: {} active • 60 Built-in Mods Ready",
-                            active_shaders
-                        ),
-                        right_w - 28.0,
-                    );
-                    ui.text(
-                        Face::Medium,
-                        11.2,
-                        rx + 14.0,
-                        bento_y + 45.0,
-                        my3_text(),
-                        &stat1,
-                    );
-                    if bento_h >= 118.0 {
-                        ui.text(
-                            Face::Medium,
-                            11.2,
-                            rx + 14.0,
-                            bento_y + 63.0,
-                            my3_muted(),
-                            &stat2,
-                        );
-                    }
-
-                    let act_y = bento_y + bento_h - 36.0;
-                    let act_w = ((right_w - 34.0) * 0.5).max(58.0);
+                let buttons_x = content_x + content_w - buttons_w - 14.0;
+                let button_y = mods_y + (mods_h - 30.0) * 0.5;
+                if content_w >= 400.0 {
                     button(
                         &mut ui,
                         &mut self.targets,
-                        [rx + 14.0, act_y, act_w, 26.0],
-                        "Installed Mods",
+                        [buttons_x, button_y, 112.0, 30.0],
+                        "Installed",
                         Action::Page(Page::Installed),
                         true,
                     );
                     button(
                         &mut ui,
                         &mut self.targets,
-                        [rx + 20.0 + act_w, act_y, act_w, 26.0],
+                        [buttons_x + 120.0, button_y, 112.0, 30.0],
                         "Browse Mods",
                         Action::Page(Page::Mods),
                         false,
+                    );
+                } else {
+                    button(
+                        &mut ui,
+                        &mut self.targets,
+                        [buttons_x, button_y, buttons_w, 30.0],
+                        "Mods",
+                        Action::Page(Page::Installed),
+                        true,
                     );
                 }
             }
@@ -2490,15 +2365,9 @@ impl Launcher {
         let in_progress_dialog = (page == Page::Play && self.worker.is_some())
             || (self.catalog.downloading.is_some() && self.catalog.busy());
         if !in_progress_dialog {
-            let show_corner_links = page == Page::Settings
-                && self.catalog.settings_category == SettingsCategory::Overview;
             let status = self.error.as_deref().unwrap_or(&self.catalog.status);
             if !status.is_empty() && !page.is_catalog() {
-                let max_snack_w = if show_corner_links {
-                    (content_w - 224.0).max(120.0)
-                } else {
-                    content_w.max(160.0)
-                };
+                let max_snack_w = content_w.max(160.0);
                 ui.m3_snackbar_toast(
                     content_x,
                     h - 38.0,
@@ -2506,24 +2375,6 @@ impl Launcher {
                     status,
                     self.error.is_some(),
                     self.anim.toast_anim,
-                );
-            }
-            if show_corner_links {
-                button(
-                    &mut ui,
-                    &mut self.targets,
-                    [w - 118.0, h - 38.0, 92.0, 28.0],
-                    "GitHub",
-                    Action::Repository,
-                    false,
-                );
-                button(
-                    &mut ui,
-                    &mut self.targets,
-                    [w - 222.0, h - 38.0, 96.0, 28.0],
-                    "Discord",
-                    Action::Discord,
-                    false,
                 );
             }
         }
@@ -7496,23 +7347,6 @@ impl Launcher {
             Some(Action::ConfirmDeleteLocal) => {
                 self.catalog.remove_local(&self.home);
                 self.chooser = None;
-            }
-            Some(Action::Repository) => {
-                self.catalog.status = if crate::platform::open_repository() {
-                    "Repository opened in browser."
-                } else {
-                    "No browser available to open the repository."
-                }
-                .into();
-            }
-            Some(Action::Discord) => {
-                self.catalog.status = if crate::platform::open_url("https://discord.gg/CjyWBu2mC7")
-                {
-                    "Discord opened in browser."
-                } else {
-                    "No browser available to open Discord."
-                }
-                .into();
             }
             Some(Action::Account) => {
                 self.catalog.editing = None;
