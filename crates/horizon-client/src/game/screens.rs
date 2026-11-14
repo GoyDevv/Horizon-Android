@@ -25,6 +25,7 @@ impl Screen {
             | Self::WorldOptions
             | Self::Friends
             | Self::ServerLinks
+            | Self::SkinChanger
             | Self::ConfirmLink
             | Self::DialogWarning
             | Self::Mod

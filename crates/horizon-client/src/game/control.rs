@@ -1094,6 +1094,7 @@ impl Game<'_> {
             Screen::WorldOptions => "world-options",
             Screen::Friends => "friends",
             Screen::ServerLinks => "server-links",
+            Screen::SkinChanger => "skin-changer",
             Screen::ConfirmLink => "confirm-link",
             Screen::DialogWarning => "dialog-warning",
             Screen::CommandBlock => "command-block",

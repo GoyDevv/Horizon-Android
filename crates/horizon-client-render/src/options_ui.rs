@@ -1540,6 +1540,8 @@ enum Act {
     CopyAgentDetails,
     #[cfg(target_os = "android")]
     TouchControls,
+    #[cfg(target_os = "android")]
+    SkinChanger,
 }
 enum WKind {
     Button {
@@ -1672,6 +1674,8 @@ pub enum Event {
     CopyAgentDetails,
     #[cfg(target_os = "android")]
     TouchControls,
+    #[cfg(target_os = "android")]
+    SkinChanger,
     /// The narrator option changed (after its `Changed`): the option's
     /// `onValueUpdate`, `GameNarrator.updateNarratorStatus`.
     Narrator,
@@ -2699,7 +2703,22 @@ impl OptionsUi {
                 // SkinCustomizationScreen: the seven layers, then Main Hand.
                 let mut opts: Vec<Opt> = (0..MODEL_PART_KEYS.len()).map(Opt::ModelPart).collect();
                 opts.push(Opt::MainHand);
-                pairs(&opts)
+                #[allow(unused_mut)]
+                let mut rows = pairs(&opts);
+                #[cfg(target_os = "android")]
+                if self.in_world {
+                    rows.push(Row::Buttons(
+                        button(
+                            0.0,
+                            0.0,
+                            310.0,
+                            Text::literal("Skin Changer..."),
+                            Act::SkinChanger,
+                        ),
+                        None,
+                    ));
+                }
+                rows
             }
             Page::Online => {
                 // OnlineOptionsScreen without the Xbox and friends-list parts.
@@ -4393,6 +4412,8 @@ impl OptionsUi {
                         Act::CopyAgentDetails => events.push(Event::CopyAgentDetails),
                         #[cfg(target_os = "android")]
                         Act::TouchControls => events.push(Event::TouchControls),
+                        #[cfg(target_os = "android")]
+                        Act::SkinChanger => events.push(Event::SkinChanger),
                         Act::None => {}
                     }
                 }
@@ -5343,6 +5364,8 @@ impl OptionsUi {
                         }
                         #[cfg(target_os = "android")]
                         Act::TouchControls => events.push(Event::TouchControls),
+                        #[cfg(target_os = "android")]
+                        Act::SkinChanger => events.push(Event::SkinChanger),
                         Act::Credits => events.push(Event::Credits),
                         Act::CopyAgentDetails => events.push(Event::CopyAgentDetails),
                         Act::None => {}

@@ -278,6 +278,7 @@ mod screens;
 mod sculk;
 mod sculk_fixture;
 mod server_links;
+mod skin_changer;
 mod server_mods;
 mod server_packs;
 mod server_travel;
@@ -793,6 +794,8 @@ enum Screen {
     BlockEditor,
     /// ServerLinksDialogScreen: a server's links (game/server_links.rs).
     ServerLinks,
+    /// Options > Skin Customization > Skin Changer (game/skin_changer.rs).
+    SkinChanger,
     /// ConfirmLinkScreen for a server link (game/server_links.rs).
     ConfirmLink,
     /// DialogScreen.WarningScreen: the note about custom screens.
@@ -826,6 +829,7 @@ impl Screen {
             Screen::CommandBlock => "command_block",
             Screen::BlockEditor => "block_editor",
             Screen::ServerLinks => "server_links",
+            Screen::SkinChanger => "skin_changer",
             Screen::ConfirmLink => "confirm_link",
             Screen::DialogWarning => "dialog_warning",
             Screen::Win => "win",
@@ -2885,6 +2889,8 @@ struct Game<'a> {
     adv_ui: advancements_screen::AdvUi,
     /// The Server Links screens' state (game/server_links.rs).
     links_ui: server_links::LinksUi,
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    skin_changer_ui: skin_changer::SkinChangerUi,
     camera_type: perspective::CameraType,
     fangs: fangs::FangState,
     /// The local player as a model (third person, the inventory).
@@ -7626,6 +7632,7 @@ impl Game<'_> {
                     | Screen::WorldOptions
                     | Screen::Friends
                     | Screen::ServerLinks
+                    | Screen::SkinChanger
                     | Screen::ConfirmLink
                     | Screen::DialogWarning
                     | Screen::CommandBlock
@@ -8413,6 +8420,7 @@ impl Game<'_> {
             Screen::WorldOptions => self.draw_world_options(&mut batch),
             Screen::Friends => self.draw_friends_screen(&mut batch),
             Screen::ServerLinks => self.draw_server_links(&mut batch),
+            Screen::SkinChanger => self.draw_skin_changer(&mut batch),
             Screen::ConfirmLink => self.draw_confirm_link(&mut batch),
             Screen::DialogWarning => self.draw_dialog_warning(&mut batch),
             Screen::CommandBlock => self.draw_command_block(&mut batch),
@@ -15691,6 +15699,7 @@ impl Game<'_> {
                 }
                 Screen::Stats | Screen::Friends => self.screen = Screen::Paused,
                 Screen::ServerLinks => self.screen = Screen::Paused,
+                Screen::SkinChanger => self.close_skin_changer(),
                 // ConfirmScreen.keyPressed: Escape answers no; both return to
                 // the Server Links screen they came from.
                 Screen::ConfirmLink => self.screen = self.confirm_link_back(),
@@ -17357,6 +17366,9 @@ impl Game<'_> {
                         if self.screen == Screen::DebugOptions {
                             self.debug_options_drag();
                         }
+                        if self.screen == Screen::SkinChanger {
+                            self.skin_changer_drag();
+                        }
                         if self.screen == Screen::WorldOptions {
                             self.world_options_drag();
                         }
@@ -17499,6 +17511,9 @@ impl Game<'_> {
                     }
                     if self.screen == Screen::ServerLinks && d != 0.0 {
                         self.server_links_scroll(d);
+                    }
+                    if self.screen == Screen::SkinChanger && d != 0.0 {
+                        self.skin_changer_scroll(d);
                     }
                     if self.screen == Screen::DebugOptions && d != 0.0 {
                         self.debug_options_scroll(d);
@@ -17706,6 +17721,9 @@ impl Game<'_> {
                         }
                         Screen::WorldOptions if pressed && button == MouseButton::Left => {
                             self.world_options_click()
+                        }
+                        Screen::SkinChanger if button == MouseButton::Left => {
+                            self.skin_changer_mouse(pressed)
                         }
                         Screen::ServerLinks if pressed && button == MouseButton::Left => {
                             self.server_links_click()?
@@ -18942,6 +18960,7 @@ impl<'a> Game<'a> {
             stats_ui: Default::default(),
             adv_ui: Default::default(),
             links_ui: Default::default(),
+            skin_changer_ui: Default::default(),
             camera_type: Default::default(),
             fangs: Default::default(),
             player_model: None,
@@ -21645,6 +21664,7 @@ mod tests {
             Screen::CommandBlock,
             Screen::BlockEditor,
             Screen::ServerLinks,
+            Screen::SkinChanger,
             Screen::ConfirmLink,
             Screen::DialogWarning,
             Screen::Win,

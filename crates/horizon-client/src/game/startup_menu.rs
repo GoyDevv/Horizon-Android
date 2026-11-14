@@ -702,6 +702,8 @@ impl Loading {
                     self.settings.narrator(),
                     &mut self.menu.narrator_toast,
                 ),
+                #[cfg(target_os = "android")]
+                Event::SkinChanger => {}
                 // Mods' settings pages open only in a running game.
                 Event::ModSettings(_) | Event::NativeSettings(_) | Event::NativeButton(..) => {}
                 // The startup menu runs before the game opens a control socket.

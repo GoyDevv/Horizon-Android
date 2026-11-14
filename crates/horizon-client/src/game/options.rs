@@ -369,6 +369,8 @@ impl Game<'_> {
                     self.pad.touch.open_editor();
                     self.dragging = false;
                 }
+                #[cfg(target_os = "android")]
+                Event::SkinChanger => self.open_skin_changer(),
                 Event::ButtonClick => self.audio.play_button_click(),
                 Event::Changed => {
                     #[cfg(target_os = "android")]
