@@ -224,7 +224,9 @@ impl Library {
             game_home.join("horizon-appearance.json"),
             descriptor.to_string(),
         )
-        .map_err(|_| "Could not prepare the game's appearance.".into())
+        .map_err(|_| "Could not prepare the game's appearance.".to_string())?;
+        let _ = super::changer::Link::new(root, account_key, cloud).write(game_home);
+        Ok(())
     }
 }
 fn valid_id(id: &str) -> bool {

@@ -7,6 +7,7 @@ use super::{
     read_cape, read_file, read_skin,
 };
 use image::RgbaImage;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -110,6 +111,67 @@ pub fn max_scroll(count: usize, columns: usize, tile_h: f32, gap: f32, viewport_
     }
     let content = rows as f32 * (tile_h + gap) - gap;
     (content - viewport_h).max(0.0)
+}
+
+pub const LINK_FILE: &str = "horizon-wardrobe.json";
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Link {
+    pub schema: u32,
+    pub root: PathBuf,
+    pub key: String,
+    pub skin: Option<PathBuf>,
+    pub slim: bool,
+    pub cape: Option<PathBuf>,
+}
+
+impl Link {
+    pub fn new(root: &Path, key: &str, cloud: Option<(&Path, bool, Option<&Path>)>) -> Self {
+        Self {
+            schema: 1,
+            root: root.to_owned(),
+            key: key.to_owned(),
+            skin: cloud.map(|(p, _, _)| p.to_owned()),
+            slim: cloud.is_some_and(|(_, s, _)| s),
+            cape: cloud.and_then(|(_, _, c)| c.map(Path::to_owned)),
+        }
+    }
+
+    pub fn write(&self, home: &Path) -> Result<(), String> {
+        let bytes = serde_json::to_vec(self).map_err(|_| "Could not encode the wardrobe link.")?;
+        std::fs::write(home.join(LINK_FILE), bytes)
+            .map_err(|_| "Could not write the wardrobe link.".to_string())
+    }
+
+    pub fn read(home: &Path) -> Option<Self> {
+        use std::io::Read;
+        let mut bytes = Vec::new();
+        std::fs::File::open(home.join(LINK_FILE))
+            .ok()?
+            .take(65537)
+            .read_to_end(&mut bytes)
+            .ok()?;
+        if bytes.len() > 65536 {
+            return None;
+        }
+        let link: Self = serde_json::from_slice(&bytes).ok()?;
+        (link.schema == 1 && link.root.is_absolute() && link.root.join("wardrobe.json").is_file())
+            .then_some(link)
+    }
+
+    pub fn cloud(&self) -> Option<(&Path, bool, Option<&Path>)> {
+        self.skin
+            .as_deref()
+            .map(|skin| (skin, self.slim, self.cape.as_deref()))
+    }
+
+    pub fn changer(&self) -> Result<Changer, String> {
+        Changer::new(&self.root, &self.key, self.skin.as_deref())
+    }
+
+    pub fn publish(&self, changer: &Changer, home: &Path) -> Result<(), String> {
+        changer.prepare_game(home, self.cloud())
+    }
 }
 
 type StageKey = (usize, bool, [u32; 3], Option<String>, bool);
@@ -487,5 +549,45 @@ mod tests {
         assert_eq!(max_scroll(3, 3, 70.0, 6.0, 100.0), 0.0);
         assert_eq!(max_scroll(7, 3, 70.0, 6.0, 100.0), 3.0 * 76.0 - 6.0 - 100.0);
         assert_eq!(max_scroll(10, 3, 70.0, 6.0, 1000.0), 0.0);
+    }
+
+    #[test]
+    fn the_link_round_trips_and_ignores_a_missing_or_foreign_wardrobe() {
+        let root = scratch("link");
+        let (changer, ids) = changer(&root);
+        let home = root.join("game");
+        std::fs::create_dir_all(&home).unwrap();
+        assert!(Link::read(&home).is_none());
+        let cloud = root.join("cloud.png");
+        let link = Link::new(&root, "offline:me", Some((&cloud, true, None)));
+        link.write(&home).unwrap();
+        assert_eq!(Link::read(&home), Some(link.clone()));
+        assert_eq!(link.cloud(), Some((cloud.as_path(), true, None)));
+        assert!(Link::new(&root, "offline:me", None).cloud().is_none());
+
+        let mut changed = link.changer().unwrap();
+        changed.select_tile(1);
+        changed.apply().unwrap();
+        link.publish(&changed, &home).unwrap();
+        let handoff: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(home.join("horizon-appearance.json")).unwrap())
+                .unwrap();
+        assert_eq!(
+            handoff["skin"].as_str(),
+            Library::image(&root, &ids[0]).unwrap().to_str()
+        );
+        let _ = changer;
+
+        std::fs::write(home.join(LINK_FILE), b"{\"schema\":2}").unwrap();
+        assert!(Link::read(&home).is_none());
+        let mut relative = link.clone();
+        relative.root = PathBuf::from("wardrobe");
+        relative.write(&home).unwrap();
+        assert!(Link::read(&home).is_none());
+        let mut missing = link;
+        missing.root = root.join("absent");
+        missing.write(&home).unwrap();
+        assert!(Link::read(&home).is_none());
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
