@@ -338,6 +338,36 @@ pub fn open_documents(id: &str) -> bool {
     })
     .is_some()
 }
+pub fn open_url(url: &str) -> bool {
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+        return false;
+    }
+    with_context(|env, activity| {
+        let address = JObject::from(env.new_string(url)?);
+        let uri = env
+            .call_static_method(
+                "android/net/Uri",
+                "parse",
+                "(Ljava/lang/String;)Landroid/net/Uri;",
+                &[JValue::Object(&address)],
+            )?
+            .l()?;
+        let action = JObject::from(env.new_string("android.intent.action.VIEW")?);
+        let intent = env.new_object(
+            "android/content/Intent",
+            "(Ljava/lang/String;Landroid/net/Uri;)V",
+            &[JValue::Object(&action), JValue::Object(&uri)],
+        )?;
+        env.call_method(
+            activity,
+            "startActivity",
+            "(Landroid/content/Intent;)V",
+            &[JValue::Object(&intent)],
+        )?;
+        Ok(())
+    })
+    .is_some()
+}
 /// Public Android power/thermal status; no device identifiers or sysfs access.
 pub fn performance_power() -> serde_json::Value {
     with_context(|env, activity| {
