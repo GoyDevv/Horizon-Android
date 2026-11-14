@@ -100,7 +100,6 @@ struct Layout {
     side: [f32; 4],
     stage: [f32; 4],
     buttons: [[f32; 4]; 3],
-    zoom: [[f32; 4]; 2],
     done: [f32; 4],
     columns: usize,
 }
@@ -131,10 +130,6 @@ impl Layout {
             button_w,
             (first - top - 6.0 - 14.0).max(40.0),
         ];
-        let zoom = [
-            [stage[0] + stage[2] - 30.0, stage[1] + 2.0, 14.0, 14.0],
-            [stage[0] + stage[2] - 15.0, stage[1] + 2.0, 14.0, 14.0],
-        ];
         let done = [((w - 200.0) / 2.0).floor(), h - FOOTER + 5.0, 200.0, BUTTON];
         let columns = changer::columns(grid[2] - 10.0, TILE[0], TILE_GAP);
         Self {
@@ -142,7 +137,6 @@ impl Layout {
             side,
             stage,
             buttons,
-            zoom,
             done,
             columns,
         }
@@ -304,10 +298,12 @@ impl Game<'_> {
             (seconds * 0.9).sin() * 24.0
         };
         let yaw = 180.0 + self.skin_changer_ui.title_spin + sway;
+        let [x0, y0, x1, y1] = layout.model;
+        let model = [x0, y0, x1 - x0, y1 - y0];
         self.draw_model(
             batch,
-            layout.model,
-            layout.model,
+            model,
+            model,
             skin.as_deref(),
             slim,
             cape.as_deref(),
@@ -424,7 +420,10 @@ impl Game<'_> {
                 t.skin_stage.is_some() && matches!(t.mode, horizon_client::title::Mode::Main)
             })
             .and_then(|_| horizon_client::title::skin_layout(w, h))
-            .is_some_and(|layout| inside(self.cursor, layout.model));
+            .is_some_and(|layout| {
+                let [x0, y0, x1, y1] = layout.model;
+                inside(self.cursor, [x0, y0, x1 - x0, y1 - y0])
+            });
         if over {
             self.skin_changer_ui.title_grab = Some(self.cursor.0);
         }
@@ -637,7 +636,7 @@ impl Game<'_> {
                 .stage_cape()
                 .map(|(id, px)| (format!("capes/changer/{id}"), px)),
             yaw: 200.0 + state.spin,
-            zoom: state.changer.camera.zoom,
+            zoom: 1.0,
         });
         let selected_name = fit(
             atlas,
@@ -653,19 +652,16 @@ impl Game<'_> {
             u32::MAX,
             true,
         );
-        for (rect, label) in layout.zoom.iter().zip(["-", "+"]) {
-            ui::button(
-                batch,
-                atlas,
-                rect[0],
-                rect[1],
-                rect[2],
-                rect[3],
-                &Text::literal(label),
-                true,
-                inside(cursor, *rect),
-            );
-        }
+        let hint = Text::literal("Drag to rotate");
+        let hw = atlas.font.width_text(&hint);
+        batch.text_styled(
+            atlas,
+            &hint,
+            layout.stage[0] + ((layout.stage[2] - hw) / 2.0).floor(),
+            layout.stage[1] + 4.0,
+            0xFF99_9999,
+            true,
+        );
 
         let applied = state.changer.selected == active;
         let labels = [
@@ -758,13 +754,6 @@ impl Game<'_> {
             self.close_skin_changer();
             return;
         }
-        for (rect, factor) in layout.zoom.iter().zip([1.0 / 1.2, 1.2]) {
-            if inside(cursor, *rect) {
-                state.changer.camera.zoom(factor);
-                self.audio.play_button_click();
-                return;
-            }
-        }
         let active = state.changer.active();
         if inside(cursor, layout.buttons[0]) {
             if state.changer.selected != active {
@@ -849,7 +838,7 @@ impl Game<'_> {
             return;
         };
         if inside(cursor, layout.stage) || inside(cursor, layout.side) {
-            state.changer.camera.zoom(1.0 + delta * 0.1);
+            state.spin = (state.spin - delta * 15.0).rem_euclid(360.0);
             return;
         }
         let limit = changer::max_scroll(
