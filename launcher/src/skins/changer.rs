@@ -19,6 +19,11 @@ pub type Runs = Arc<Vec<Run>>;
 
 pub const THUMB: [u32; 2] = [64, 96];
 pub const STAGE: [u32; 2] = [160, 240];
+const CAPE_CAMERA: Camera = Camera {
+    yaw: 155.0,
+    pitch: -6.0,
+    zoom: 1.0,
+};
 const THUMB_CAMERA: Camera = Camera {
     yaw: -25.0,
     pitch: -8.0,
@@ -50,6 +55,16 @@ pub fn thumbnail(skin: &RgbaImage, model: Model) -> Runs {
         None,
         model,
         THUMB_CAMERA,
+        THUMB,
+    )))
+}
+
+pub fn cape_thumbnail(cape: &RgbaImage, skin: &RgbaImage) -> Runs {
+    Arc::new(runs(&preview::render(
+        skin,
+        Some(cape),
+        Model::Classic,
+        CAPE_CAMERA,
         THUMB,
     )))
 }
@@ -647,5 +662,22 @@ mod tests {
         assert_eq!(library.model_of(&ids[0]), Model::Classic);
         assert_eq!(library.selections["offline:me"].model, Model::Classic);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_cape_thumbnail_shows_the_cape_from_behind_and_differs_from_the_bare_skin() {
+        let skin = preview::mannequin();
+        let cape = RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]));
+        let with = cape_thumbnail(&cape, &skin);
+        let without = thumbnail(&skin, Model::Classic);
+        assert_ne!(*with, *without);
+        assert!(
+            with.iter()
+                .any(|(_, c)| c[0] > 150 && c[1] < 80 && c[3] == 255)
+        );
+        assert!(
+            with.iter()
+                .all(|(r, _)| r[0] + r[2] <= THUMB[0] as f32 && r[1] + r[3] <= THUMB[1] as f32)
+        );
     }
 }

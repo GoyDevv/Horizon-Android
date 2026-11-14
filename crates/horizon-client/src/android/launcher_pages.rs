@@ -318,7 +318,7 @@ pub(super) enum Action {
     WardrobeActivateCape(usize),
     WardrobeUseCloud,
     WardrobeModel,
-    WardrobeRotate(i8),
+    WardrobeSkinModel(usize),
     WardrobeZoom(bool),
     WardrobeHideCape,
     DeviceSignIn,
@@ -758,9 +758,8 @@ fn draw_setting_card(
             let bar_w = (track_w - 20.0).max(24.0);
             let bar_y = pill_y + 23.0;
             let t = fraction.clamp(0.0, 1.0);
-            let is_dragging = ACTIVE_SLIDER_DRAG.with(|c| {
-                c.get().is_some_and(|(_, bx, _)| (bx - bar_x).abs() < 1.0)
-            });
+            let is_dragging = ACTIVE_SLIDER_DRAG
+                .with(|c| c.get().is_some_and(|(_, bx, _)| (bx - bar_x).abs() < 1.0));
             ui.m3_expressive_slider(bar_x, bar_y, bar_w, 6.0, t, is_dragging);
 
             let left_half = [track_x, pill_y, track_w * 0.5, 36.0];
@@ -982,7 +981,15 @@ fn draw_my3_progress_view(
     // 2. Material 2026 (M3 Expressive) Wavy Linear Progress Indicator & Morphing Spinner
     let bar_y = head_y + 56.0;
     let bar_h = 14.0;
-    ui.m3_wavy_progress(inner_x, bar_y, inner_w, bar_h, clamped, shimmer_phase, paused);
+    ui.m3_wavy_progress(
+        inner_x,
+        bar_y,
+        inner_w,
+        bar_h,
+        clamped,
+        shimmer_phase,
+        paused,
+    );
     if !paused {
         ui.m3_wavy_circular_spinner(pct_pill_x - 16.0, head_y + 13.0, 8.5, shimmer_phase);
     }
@@ -1100,8 +1107,22 @@ fn draw_my3_progress_view(
     let pause_x = cancel_x - pause_w - 10.0;
 
     let pause_rect = [pause_x, btn_y, pause_w, btn_h];
-    ui.rounded(pause_rect[0], pause_rect[1], pause_rect[2], pause_rect[3], 8.0, my3_pause_bg());
-    ui.border(pause_rect[0], pause_rect[1], pause_rect[2], pause_rect[3], 8.0, my3_accent());
+    ui.rounded(
+        pause_rect[0],
+        pause_rect[1],
+        pause_rect[2],
+        pause_rect[3],
+        8.0,
+        my3_pause_bg(),
+    );
+    ui.border(
+        pause_rect[0],
+        pause_rect[1],
+        pause_rect[2],
+        pause_rect[3],
+        8.0,
+        my3_accent(),
+    );
     ui.icon(
         if paused { Icon::Play } else { Icon::Pause },
         pause_rect[0] + 12.0,
@@ -1120,7 +1141,14 @@ fn draw_my3_progress_view(
     targets.push((pause_rect, pause_action));
 
     let cancel_rect = [cancel_x, btn_y, cancel_w, btn_h];
-    ui.rounded(cancel_rect[0], cancel_rect[1], cancel_rect[2], cancel_rect[3], 8.0, my3_cancel_bg());
+    ui.rounded(
+        cancel_rect[0],
+        cancel_rect[1],
+        cancel_rect[2],
+        cancel_rect[3],
+        8.0,
+        my3_cancel_bg(),
+    );
     ui.border(
         cancel_rect[0],
         cancel_rect[1],
@@ -1416,16 +1444,13 @@ impl Launcher {
                 17.0,
                 ic_col,
             );
-            let face = if selected { Face::SemiBold } else { Face::Medium };
+            let face = if selected {
+                Face::SemiBold
+            } else {
+                Face::Medium
+            };
             let label = ui.fit_text(face, 13.5, page.name(), nw - 44.0);
-            ui.text(
-                face,
-                13.5,
-                nx + 41.0,
-                ny + (nav_h - 19.0) * 0.5,
-                fg,
-                &label,
-            );
+            ui.text(face, 13.5, nx + 41.0, ny + (nav_h - 19.0) * 0.5, fg, &label);
             self.targets
                 .push(([nx, ny, nw, nav_h], Action::Page(*page)));
         }
@@ -1609,8 +1634,23 @@ impl Launcher {
                 let split_h = 44.0;
 
                 if is_launching && installed {
-                    ui.rounded(split_x, split_y, split_total_w, split_h, 12.0, my3_accent_soft());
-                    ui.stroke_rounded(split_x, split_y, split_total_w, split_h, 12.0, 1.5, my3_accent());
+                    ui.rounded(
+                        split_x,
+                        split_y,
+                        split_total_w,
+                        split_h,
+                        12.0,
+                        my3_accent_soft(),
+                    );
+                    ui.stroke_rounded(
+                        split_x,
+                        split_y,
+                        split_total_w,
+                        split_h,
+                        12.0,
+                        1.5,
+                        my3_accent(),
+                    );
                     ui.m3_wavy_circular_spinner(
                         split_x + 22.0,
                         split_y + 16.0,
@@ -1809,8 +1849,7 @@ impl Launcher {
                 };
                 let max_lines = ((bento_h - 64.0) / 18.0).floor().clamp(1.0, 3.0) as usize;
                 for (index, line) in changelog_lines.iter().take(max_lines).enumerate() {
-                    let fitted =
-                        ui.fit_text(Face::Regular, 11.8, line, (left_w - 28.0).max(80.0));
+                    let fitted = ui.fit_text(Face::Regular, 11.8, line, (left_w - 28.0).max(80.0));
                     ui.text(
                         Face::Regular,
                         11.8,
@@ -1844,22 +1883,45 @@ impl Launcher {
                 if has_two_cols && right_w > 140.0 {
                     let rx = content_x + left_w + bento_gap;
                     ui.m3_tonal_card(rx, bento_y, right_w, bento_h, 16.0, false);
-                    ui.rounded(rx + 14.0, bento_y + 10.0, 28.0, 28.0, 8.0, my3_accent_soft());
-                    ui.icon(Icon::Terminal, rx + 20.0, bento_y + 16.0, 16.0, my3_accent());
-                    let rt_hdr = ui.fit_text(
+                    ui.rounded(
+                        rx + 14.0,
+                        bento_y + 10.0,
+                        28.0,
+                        28.0,
+                        8.0,
+                        my3_accent_soft(),
+                    );
+                    ui.icon(
+                        Icon::Terminal,
+                        rx + 20.0,
+                        bento_y + 16.0,
+                        16.0,
+                        my3_accent(),
+                    );
+                    let rt_hdr =
+                        ui.fit_text(Face::SemiBold, 12.5, "Horizon Mod Engine", right_w - 54.0);
+                    ui.text(
                         Face::SemiBold,
                         12.5,
-                        "Horizon Mod Engine",
-                        right_w - 54.0,
+                        rx + 48.0,
+                        bento_y + 10.0,
+                        my3_text(),
+                        &rt_hdr,
                     );
-                    ui.text(Face::SemiBold, 12.5, rx + 48.0, bento_y + 10.0, my3_text(), &rt_hdr);
                     let rt_sub = ui.fit_text(
                         Face::Regular,
                         10.5,
                         "Official Horizon Mods • In-Process Engine",
                         right_w - 54.0,
                     );
-                    ui.text(Face::Regular, 10.5, rx + 48.0, bento_y + 25.0, my3_accent(), &rt_sub);
+                    ui.text(
+                        Face::Regular,
+                        10.5,
+                        rx + 48.0,
+                        bento_y + 25.0,
+                        my3_accent(),
+                        &rt_sub,
+                    );
 
                     let active_mods = self
                         .catalog
@@ -1893,7 +1955,14 @@ impl Launcher {
                         ),
                         right_w - 28.0,
                     );
-                    ui.text(Face::Medium, 11.2, rx + 14.0, bento_y + 45.0, my3_text(), &stat1);
+                    ui.text(
+                        Face::Medium,
+                        11.2,
+                        rx + 14.0,
+                        bento_y + 45.0,
+                        my3_text(),
+                        &stat1,
+                    );
                     if bento_h >= 118.0 {
                         ui.text(
                             Face::Medium,
@@ -2102,8 +2171,12 @@ impl Launcher {
             let bundled_start = page_start.min(bundled.len());
             let bundled_end = page_end.min(bundled.len());
             let page_bundled = &bundled[bundled_start..bundled_end];
-            let cat_start = page_start.saturating_sub(bundled.len()).min(catalog_rows.len());
-            let cat_end = page_end.saturating_sub(bundled.len()).min(catalog_rows.len());
+            let cat_start = page_start
+                .saturating_sub(bundled.len())
+                .min(catalog_rows.len());
+            let cat_end = page_end
+                .saturating_sub(bundled.len())
+                .min(catalog_rows.len());
             let page_catalog_rows = &catalog_rows[cat_start..cat_end];
 
             let row_h = 72.0;
@@ -2384,7 +2457,10 @@ impl Launcher {
                     "Page {page_num} of {total_pages}  •  Showing {shown_first}–{page_end} of {total_horizon_items}"
                 )
             } else {
-                format!("Page {page_num}  •  {} per page", crate::catalog::CATALOG_PAGE_SIZE)
+                format!(
+                    "Page {page_num}  •  {} per page",
+                    crate::catalog::CATALOG_PAGE_SIZE
+                )
             };
             let fitted_page_info = ui.fit_text(
                 Face::Medium,
@@ -2518,10 +2594,7 @@ impl Launcher {
                 my3_text(),
                 "Replace Existing Control Preset?",
             );
-            let line1 = format!(
-                "A control preset named '{}' already exists.",
-                dup_name
-            );
+            let line1 = format!("A control preset named '{}' already exists.", dup_name);
             let fitted1 = ui.fit_text(Face::Regular, 12.0, &line1, mw - 40.0);
             ui.text(
                 Face::Regular,
@@ -2662,7 +2735,8 @@ impl Launcher {
         {
             let p = (time.elapsed().as_secs_f32() / 0.26).clamp(0.0, 1.0);
             let spring = horizon_client::ui_theme::motion::spring_expressive_spatial(p);
-            let fade = (1.0 - horizon_client::ui_theme::motion::spring_expressive_effects(p)).clamp(0.0, 1.0);
+            let fade = (1.0 - horizon_client::ui_theme::motion::spring_expressive_effects(p))
+                .clamp(0.0, 1.0);
             let rad = horizon_client::ui_theme::motion::morph_radius(
                 (*h * 0.22).clamp(6.0, 10.0),
                 7.0,
@@ -2758,7 +2832,8 @@ impl Launcher {
         // Top-right 4-segment Material 2026 Connected Button Group for CompilerMode
         let mode_count = CompilerMode::ALL.len();
         let seg_w = if compact { 76.0 } else { 98.0 };
-        let group_x = content_x + content_w - seg_w * (mode_count as f32) - (mode_count as f32 - 1.0) * 3.0;
+        let group_x =
+            content_x + content_w - seg_w * (mode_count as f32) - (mode_count as f32 - 1.0) * 3.0;
         for (i, mode) in CompilerMode::ALL.into_iter().enumerate() {
             let rx = group_x + i as f32 * (seg_w + 3.0);
             let rect = [rx, header_y - 1.0, seg_w, 30.0];
@@ -2782,8 +2857,12 @@ impl Launcher {
         let hint = match self.catalog.compiler_mode {
             CompilerMode::JarMod => "Modrinth mod slug/URL (e.g. appleskin) or .jar path...",
             CompilerMode::Modpack => "Modrinth modpack slug/URL or local .mrpack path...",
-            CompilerMode::DataPackUpgrade => "Enter 1.21 / 26.2 data pack path to upgrade to 26.3...",
-            CompilerMode::NativeSoBuild => "Tap 'Build Native .so' to bundle all active .hnmod/.hmod mods...",
+            CompilerMode::DataPackUpgrade => {
+                "Enter 1.21 / 26.2 data pack path to upgrade to 26.3..."
+            }
+            CompilerMode::NativeSoBuild => {
+                "Tap 'Build Native .so' to bundle all active .hnmod/.hmod mods..."
+            }
         };
         let query_r = ui.text_field(
             content_x,
@@ -2795,7 +2874,8 @@ impl Launcher {
             hint,
             self.catalog.editing == Some("compiler_query"),
         );
-        self.targets.push((query_r, Action::Field("compiler_query")));
+        self.targets
+            .push((query_r, Action::Field("compiler_query")));
 
         button(
             ui,
@@ -2839,11 +2919,30 @@ impl Launcher {
             );
 
             let hdr = format!("{} ({} v{})", res.name, res.mod_id, res.version);
-            let fit_hdr = ui.fit_text(Face::SemiBold, 14.5, &hdr, (content_w - vw - 36.0).max(80.0));
-            ui.text(Face::SemiBold, 14.5, content_x + 14.0, diag_y + 8.0, my3_text(), &fit_hdr);
+            let fit_hdr = ui.fit_text(
+                Face::SemiBold,
+                14.5,
+                &hdr,
+                (content_w - vw - 36.0).max(80.0),
+            );
+            ui.text(
+                Face::SemiBold,
+                14.5,
+                content_x + 14.0,
+                diag_y + 8.0,
+                my3_text(),
+                &fit_hdr,
+            );
 
             let fit_sum = ui.fit_text(Face::Regular, 11.5, &res.summary, content_w - 28.0);
-            ui.text(Face::Regular, 11.5, content_x + 14.0, diag_y + 30.0, my3_muted(), &fit_sum);
+            ui.text(
+                Face::Regular,
+                11.5,
+                content_x + 14.0,
+                diag_y + 30.0,
+                my3_muted(),
+                &fit_sum,
+            );
 
             // 4 Metric Chips (Blocks, Items, 26.3 Recipes, Hooks/Classes)
             let metrics = [
@@ -2879,10 +2978,30 @@ impl Launcher {
                 .map(String::as_str)
                 .unwrap_or("Carried over into horizon-mods/ & horizon-native-mods/");
             let fit_log = ui.fit_text(Face::Mono, 10.2, log_line, content_w - 28.0);
-            ui.text(Face::Mono, 10.2, content_x + 14.0, diag_y + 76.0, my3_text(), &fit_log);
+            ui.text(
+                Face::Mono,
+                10.2,
+                content_x + 14.0,
+                diag_y + 76.0,
+                my3_text(),
+                &fit_log,
+            );
         } else {
-            ui.rounded(content_x + 14.0, diag_y + 12.0, 38.0, 38.0, 10.0, my3_accent_soft());
-            ui.icon(Icon::Terminal, content_x + 23.0, diag_y + 21.0, 20.0, my3_accent());
+            ui.rounded(
+                content_x + 14.0,
+                diag_y + 12.0,
+                38.0,
+                38.0,
+                10.0,
+                my3_accent_soft(),
+            );
+            ui.icon(
+                Icon::Terminal,
+                content_x + 23.0,
+                diag_y + 21.0,
+                20.0,
+                my3_accent(),
+            );
             ui.text(
                 Face::SemiBold,
                 14.5,
@@ -2893,7 +3012,14 @@ impl Launcher {
             );
             let sub = "Carries over 1.21+ blocks, items, fluids, 26.3 recipes, loot tables & worldgen + synthesizes Hook API 415.";
             let fit_sub = ui.fit_text(Face::Regular, 11.5, sub, content_w - 76.0);
-            ui.text(Face::Regular, 11.5, content_x + 62.0, diag_y + 31.0, my3_muted(), &fit_sub);
+            ui.text(
+                Face::Regular,
+                11.5,
+                content_x + 62.0,
+                diag_y + 31.0,
+                my3_muted(),
+                &fit_sub,
+            );
 
             for (i, line) in self.catalog.compiler_logs.iter().take(2).enumerate() {
                 let fit_l = ui.fit_text(Face::Mono, 10.5, line, content_w - 28.0);
@@ -2943,14 +3069,35 @@ impl Launcher {
             }
             ui.rounded(content_x, y, content_w, card_h, 12.0, my3_card_bg());
             ui.border(content_x, y, content_w, card_h, 12.0, my3_card_border());
-            ui.rounded(content_x + 10.0, y + 8.0, 36.0, 36.0, 9.0, my3_accent_soft());
+            ui.rounded(
+                content_x + 10.0,
+                y + 8.0,
+                36.0,
+                36.0,
+                9.0,
+                my3_accent_soft(),
+            );
             ui.icon(Icon::Mods, content_x + 19.0, y + 17.0, 18.0, my3_accent());
 
             let max_tw = (content_w - 190.0).max(70.0);
             let fit_t = ui.fit_text(Face::SemiBold, 13.8, &item.title, max_tw);
-            ui.text(Face::SemiBold, 13.8, content_x + 56.0, y + 7.0, my3_text(), &fit_t);
+            ui.text(
+                Face::SemiBold,
+                13.8,
+                content_x + 56.0,
+                y + 7.0,
+                my3_text(),
+                &fit_t,
+            );
             let fit_s = ui.fit_text(Face::Regular, 11.0, &item.subtitle, max_tw);
-            ui.text(Face::Regular, 11.0, content_x + 56.0, y + 27.0, my3_muted(), &fit_s);
+            ui.text(
+                Face::Regular,
+                11.0,
+                content_x + 56.0,
+                y + 27.0,
+                my3_muted(),
+                &fit_s,
+            );
 
             button(
                 ui,
@@ -3007,8 +3154,10 @@ impl Launcher {
             self.catalog.installed_sub_tab == InstalledSubTab::Library,
             Some(Icon::Installed),
         );
-        self.targets
-            .push((lib_rect, Action::SetInstalledSubTab(InstalledSubTab::Library)));
+        self.targets.push((
+            lib_rect,
+            Action::SetInstalledSubTab(InstalledSubTab::Library),
+        ));
         ui.m3_connected_segment(
             fm_rect,
             1,
@@ -3017,8 +3166,10 @@ impl Launcher {
             self.catalog.installed_sub_tab == InstalledSubTab::FileManager,
             Some(Icon::Folder),
         );
-        self.targets
-            .push((fm_rect, Action::SetInstalledSubTab(InstalledSubTab::FileManager)));
+        self.targets.push((
+            fm_rect,
+            Action::SetInstalledSubTab(InstalledSubTab::FileManager),
+        ));
 
         if self.catalog.installed_sub_tab == InstalledSubTab::Library {
             // Row 1: Search filter input + Sort selector + Quick Import CTA
@@ -3092,12 +3243,7 @@ impl Launcher {
                     InstalledFilter::Packs => Some(Icon::Packs),
                     InstalledFilter::Shaders => Some(Icon::Shaders),
                 };
-                ui.m3_filter_chip(
-                    pr,
-                    &lbl,
-                    self.catalog.installed_filter == filter,
-                    f_icon,
-                );
+                ui.m3_filter_chip(pr, &lbl, self.catalog.installed_filter == filter, f_icon);
                 self.targets.push((pr, Action::SetInstalledFilter(filter)));
             }
 
@@ -3255,12 +3401,7 @@ impl Launcher {
                     .icons
                     .get(&item.file)
                     .map(|v| (item.file.as_str(), v))
-                    .or_else(|| {
-                        self.catalog
-                            .icons
-                            .get(raw_stem)
-                            .map(|v| (raw_stem, v))
-                    })
+                    .or_else(|| self.catalog.icons.get(raw_stem).map(|v| (raw_stem, v)))
                     .or_else(|| {
                         self.catalog
                             .icons
@@ -3348,7 +3489,9 @@ impl Launcher {
                 );
 
                 // Enable/Disable M3 switch + Export & Delete buttons
-                let switch_t = self.anim.step_switch(&format!("local_{}", item.file), item.enabled, 0.016);
+                let switch_t =
+                    self.anim
+                        .step_switch(&format!("local_{}", item.file), item.enabled, 0.016);
                 ui.m3_switch_animated(toggle_r[0] + 2.0, y + 17.0, switch_t);
                 if let Some(c) = ui.clip_rect(toggle_r) {
                     self.targets.push((c, Action::ToggleLocal(orig_idx)));
@@ -6032,12 +6175,20 @@ impl Launcher {
                     (
                         "Import Controls from File Manager",
                         "Pick a control .json file; auto-detects MCPE or GoyControl and saves to its folder",
-                        SettingControl::Button("Import Controls", Action::ImportControlProfile, true),
+                        SettingControl::Button(
+                            "Import Controls",
+                            Action::ImportControlProfile,
+                            true,
+                        ),
                     ),
                     (
                         "Export Active Control Preset",
                         "Open system File Manager to choose where to save your exported control .json",
-                        SettingControl::Button("Export Controls", Action::ExportControlProfile, false),
+                        SettingControl::Button(
+                            "Export Controls",
+                            Action::ExportControlProfile,
+                            false,
+                        ),
                     ),
                     (
                         &copy_title,
@@ -7084,9 +7235,12 @@ impl Launcher {
                 let touch = horizon_client::touch::Settings::load_from(
                     &game_home.join("horizon-touch.json"),
                 );
-                let clean = horizon_client::touch::Settings::sanitize_profile_name(&touch.preset_id);
+                let clean =
+                    horizon_client::touch::Settings::sanitize_profile_name(&touch.preset_id);
                 let suggested_name = format!("horizon-controls-{clean}.json");
-                if let Ok(saved_path) = touch.export_profile(&self.home, &game_home, &touch.preset_id) {
+                if let Ok(saved_path) =
+                    touch.export_profile(&self.home, &game_home, &touch.preset_id)
+                {
                     self.catalog.fm_clipboard = Some((vec![saved_path], false));
                 }
                 match serde_json::to_vec_pretty(&touch) {
@@ -7527,10 +7681,7 @@ impl Launcher {
             ),
             Some(Action::WardrobeUseCloud) => self.wardrobe.use_cloud(),
             Some(Action::WardrobeModel) => self.wardrobe.model(),
-            Some(Action::WardrobeRotate(direction)) => {
-                self.wardrobe.camera.rotate(-direction as f32 * 25.0, 0.0);
-                self.wardrobe.preview();
-            }
+            Some(Action::WardrobeSkinModel(index)) => self.wardrobe.skin_model(index),
             Some(Action::WardrobeZoom(inward)) => {
                 self.wardrobe
                     .camera
@@ -7936,7 +8087,9 @@ impl Launcher {
                     let game_home = self.catalog.config.game_home(&self.home);
                     crate::document_store::sync_mods_folder(&game_home);
                     let path = if let Some(bid) = item.file.strip_prefix("builtin:") {
-                        game_home.join("horizon-mods").join(format!("{bid}.mod.json"))
+                        game_home
+                            .join("horizon-mods")
+                            .join(format!("{bid}.mod.json"))
                     } else {
                         let direct = game_home.join(&item.file);
                         if direct.exists() {
@@ -8238,7 +8391,8 @@ impl Launcher {
                         Err(e) => self.catalog.status = e,
                     }
                 } else {
-                    self.catalog.status = "Select a file or folder (or tap Export on any row) to export.".into();
+                    self.catalog.status =
+                        "Select a file or folder (or tap Export on any row) to export.".into();
                 }
             }
             Some(Action::OpenUpdateScreen) => {
@@ -8736,8 +8890,7 @@ fn decode_custom_gif(
         } else {
             (sw, (sw * ROWS / COLS).max(1))
         };
-        let cropped =
-            imageops::crop_imm(&buffer, (sw - cw) / 2, (sh - ch) / 2, cw, ch).to_image();
+        let cropped = imageops::crop_imm(&buffer, (sw - cw) / 2, (sh - ch) / 2, cw, ch).to_image();
         let small = imageops::resize(&cropped, COLS, ROWS, imageops::FilterType::Triangle);
         let mut cells = Vec::with_capacity((COLS * ROWS) as usize);
         for pixel in small.pixels() {

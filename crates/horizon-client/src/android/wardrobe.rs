@@ -25,6 +25,8 @@ pub(super) enum CloudAction {
     Upload,
     Cape(usize),
 }
+const TOAST_SECONDS: f32 = 3.5;
+
 pub(super) struct Wardrobe {
     pub root: PathBuf,
     default_skin: PathBuf,
@@ -41,6 +43,8 @@ pub(super) struct Wardrobe {
     rect: [f32; 4],
     fingers: std::collections::BTreeMap<u64, [f32; 2]>,
     note: String,
+    note_seen: String,
+    note_at: Option<std::time::Instant>,
     damaged: bool,
     /// The account whose appearance is shown, used to key the head cache.
     name: String,
@@ -74,6 +78,8 @@ impl Wardrobe {
             view: [0.0; 3],
             fingers: Default::default(),
             note,
+            note_seen: String::new(),
+            note_at: None,
             damaged,
             name: String::new(),
             head: None,
@@ -200,12 +206,23 @@ impl Wardrobe {
             self.preview();
         }
     }
+    fn cape_thumb(&mut self, id: &str) -> Option<changer::Runs> {
+        let key = (format!("cape:{id}"), false);
+        if let Some(found) = self.thumbs.get(&key) {
+            return Some(found.clone());
+        }
+        let cape = skins::read_cape(&skins::read_file(&Library::image(&self.root, id).ok()?).ok()?)
+            .ok()?;
+        let skin = skins::read_file(&self.default_skin)
+            .ok()
+            .and_then(|b| skins::read_skin(&b).ok())
+            .unwrap_or_else(preview::mannequin);
+        let runs = changer::cape_thumbnail(&cape, &skin);
+        self.thumbs.insert(key, runs.clone());
+        Some(runs)
+    }
     fn thumb(&mut self, id: &str) -> Option<changer::Runs> {
-        let slim = self
-            .library
-            .selections
-            .get(&self.key)
-            .is_some_and(|s| s.model == Model::Slim);
+        let slim = self.library.model_of(id) == Model::Slim;
         if let Some(found) = self.thumbs.get(&(id.to_owned(), slim)) {
             return Some(found.clone());
         }
@@ -248,6 +265,15 @@ impl Wardrobe {
         if self.damaged || crate::documents::busy() {
             return;
         }
+        let applied = self
+            .library
+            .selections
+            .get(&self.key)
+            .and_then(|s| s.skin.clone());
+        if let Some(id) = applied {
+            self.flip_model(&id);
+            return;
+        }
         let selection = self.library.selections.entry(self.key.clone()).or_default();
         selection.model = if selection.model == Model::Classic {
             Model::Slim
@@ -255,6 +281,40 @@ impl Wardrobe {
             Model::Classic
         };
         self.save();
+    }
+    pub fn skin_model(&mut self, index: usize) {
+        if self.damaged || crate::documents::busy() {
+            return;
+        }
+        if let Some(id) = self
+            .library
+            .entries
+            .get(index)
+            .filter(|e| e.kind == Kind::Skin)
+            .map(|e| e.id.clone())
+        {
+            self.flip_model(&id);
+        }
+    }
+    fn flip_model(&mut self, id: &str) {
+        let next = match self.library.model_of(id) {
+            Model::Classic => Model::Slim,
+            Model::Slim => Model::Classic,
+        };
+        self.note = match self.library.set_model(&self.root, id, next) {
+            Ok(()) => match next {
+                Model::Slim => "This skin now uses slim arms.".into(),
+                Model::Classic => "This skin now uses classic arms.".into(),
+            },
+            Err(error) => error,
+        };
+        self.preview();
+    }
+    fn selected_model(&self, selection: &skins::library::Selection) -> Model {
+        match &selection.skin {
+            Some(id) => self.library.model_of(id),
+            None => selection.model,
+        }
     }
     pub fn hide_cape(&mut self) {
         if self.damaged || crate::documents::busy() {
@@ -303,6 +363,7 @@ impl Wardrobe {
         if matches!(action, Some(CloudAction::Cape(_))) && cape.is_none() {
             return;
         }
+        let upload_model = self.selected_model(&selection);
         let (sender, receiver) = mpsc::channel();
         self.worker = Some(receiver);
         self.note = "Contacting account service...".into();
@@ -323,7 +384,7 @@ impl Wardrobe {
                             &account,
                             &secrets,
                             &skins::read_file(&path)?,
-                            selection.model,
+                            upload_model,
                         )?;
                     }
                     Some(CloudAction::Cape(_)) => {
@@ -437,7 +498,7 @@ impl Wardrobe {
                 .and_then(|p| skins::read_file(&p).ok())
                 .and_then(|b| skins::read_cape(&b).ok())
         };
-        let model = selection.model;
+        let model = self.selected_model(&selection);
         let image = preview::render(&skin, cape.as_ref(), model, self.camera, [160, 200]);
         self.bitmap.clear();
         for y in 0..image.height() {
@@ -468,6 +529,9 @@ impl Wardrobe {
             || self
                 .selection_changed_at
                 .is_some_and(|t| now.duration_since(t).as_secs_f32() < 0.22)
+            || self
+                .note_at
+                .is_some_and(|t| now.duration_since(t).as_secs_f32() < TOAST_SECONDS + 0.1)
     }
 
     pub fn set_tab(&mut self, capes: bool) {
@@ -551,34 +615,7 @@ impl Wardrobe {
         let h = ui.h;
         let wide = w >= 580.0;
 
-        // 1. Header & Segmented Skins / Capes Switcher
-        ui.text(
-            Face::SemiBold,
-            19.0,
-            x,
-            top,
-            theme.text_primary,
-            "Skins & Capes Studio",
-        );
-        let subtitle = ui.fit_text(
-            Face::Regular,
-            11.5,
-            if self.capes {
-                "Preview 3D capes, manage local cape overrides, or activate cloud account capes."
-            } else {
-                "Inspect your 3D character model, switch arm styles, and manage local or cloud skins."
-            },
-            w,
-        );
-        ui.text(
-            Face::Regular,
-            11.5,
-            x,
-            top + 24.0,
-            theme.text_muted,
-            &subtitle,
-        );
-
+        // 1. Segmented Skins / Capes switcher with the import icon
         let skin_count = self
             .library
             .entries
@@ -597,10 +634,28 @@ impl Wardrobe {
                 0
             };
 
-        let tabs_y = top + 46.0;
-        ui.rounded(x, tabs_y, w, 38.0, 8.0, theme.surface_dim);
-        ui.border(x, tabs_y, w, 38.0, 8.0, theme.border);
-        let tw = (w - 8.0) * 0.5;
+        let tabs_y = top;
+        let tabs_w = w - 46.0;
+        ui.rounded(x, tabs_y, tabs_w, 38.0, 8.0, theme.surface_dim);
+        ui.border(x, tabs_y, tabs_w, 38.0, 8.0, theme.border);
+        let import_rect = [x + w - 38.0, tabs_y, 38.0, 38.0];
+        ui.rounded(
+            import_rect[0],
+            import_rect[1],
+            import_rect[2],
+            import_rect[3],
+            8.0,
+            theme.accent,
+        );
+        ui.icon(
+            Icon::Plus,
+            import_rect[0] + 9.0,
+            import_rect[1] + 9.0,
+            20.0,
+            theme.on_accent,
+        );
+        targets.push((import_rect, Action::WardrobeImport));
+        let tw = (tabs_w - 8.0) * 0.5;
         for (i, (lbl, is_cape, active)) in [
             (format!("Skins ({skin_count})"), false, !self.capes),
             (format!("Capes ({cape_count})"), true, self.capes),
@@ -630,7 +685,7 @@ impl Wardrobe {
         } else {
             selection.skin.as_deref()
         };
-        let model = selection.model;
+        let model = self.selected_model(&selection);
 
         // 2. Left / Top Studio 3D Preview Card
         let preview_y = tabs_y + 48.0;
@@ -740,29 +795,6 @@ impl Wardrobe {
             );
         }
 
-        // Floating camera orbit & zoom dock at the bottom of the 3D preview card
-        let control_y = preview_y + preview_h - 36.0;
-        let btn_w = 34.0;
-        let gap = 6.0;
-        let cluster = 2.0 * btn_w + gap;
-        let cx = px + (preview_w - cluster) * 0.5;
-        for (i, (label, action)) in [
-            ("<", Action::WardrobeRotate(-1)),
-            (">", Action::WardrobeRotate(1)),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            button(
-                ui,
-                targets,
-                [cx + i as f32 * (btn_w + gap), control_y, btn_w, 28.0],
-                label,
-                action,
-                false,
-            );
-        }
-
         // Primary quick-toggle button directly below 3D preview card
         let primary_toggle_y = preview_y + preview_h + 8.0;
         if self.capes {
@@ -826,57 +858,40 @@ impl Wardrobe {
             "Default Appearance (Steve / Classic)".into()
         };
 
-        let detail_h = 46.0;
+        let detail_h = 34.0;
         ui.rounded(lx, listtop, lw, detail_h, 12.0, theme.surface);
         ui.border(lx, listtop, lw, detail_h, 12.0, theme.border);
-        let import_w = (lw * 0.42).clamp(118.0, 168.0);
-        let info_w = (lw - import_w - 24.0).max(60.0);
+        let status = if self.worker.is_some() {
+            Some("Synchronizing...")
+        } else if crate::documents::busy() {
+            Some("Waiting for Android file picker...")
+        } else {
+            None
+        };
+        let status_w = status.map_or(0.0, |t| ui.measure(Face::Regular, 9.5, t) + 12.0);
+        let info_w = (lw - 24.0 - status_w).max(60.0);
         let fitted_active = ui.fit_text(Face::SemiBold, 11.5, &active_title, info_w);
         ui.text(
             Face::SemiBold,
             11.5,
             lx + 12.0,
-            listtop + 6.0,
+            listtop + 9.0,
             theme.text_primary,
             &fitted_active,
         );
-        let detail_sub = if self.worker.is_some() {
-            "Synchronizing with account service..."
-        } else if crate::documents::busy() {
-            "Waiting for Android file picker..."
-        } else if self.capes {
-            "Import a 64×32 PNG cape or select below"
-        } else {
-            "Import a 64×64 PNG skin or select below"
-        };
-        let fitted_sub = ui.fit_text(Face::Regular, 9.5, detail_sub, info_w);
-        ui.text(
-            Face::Regular,
-            9.5,
-            lx + 12.0,
-            listtop + 24.0,
-            if self.worker.is_some() {
-                theme.accent
-            } else {
-                theme.text_muted
-            },
-            &fitted_sub,
-        );
-        button(
-            ui,
-            targets,
-            [lx + lw - import_w - 8.0, listtop + 7.0, import_w, 32.0],
-            if self.capes {
-                "+ Import Cape PNG"
-            } else {
-                "+ Import Skin PNG"
-            },
-            Action::WardrobeImport,
-            true,
-        );
+        if let Some(status) = status {
+            ui.text(
+                Face::Regular,
+                9.5,
+                lx + lw - status_w,
+                listtop + 11.0,
+                theme.accent,
+                status,
+            );
+        }
 
         let list_start = listtop + detail_h + 10.0;
-        let bottom = h - 42.0;
+        let bottom = h - 8.0;
         let mut row = list_start - scroll;
         let card_h = 42.0;
         let card_step = 48.0;
@@ -1033,29 +1048,7 @@ impl Wardrobe {
             .enumerate()
             .filter(|(_, e)| e.kind == self.kind())
             .collect();
-        if self.capes {
-            for (index, entry) in &local {
-                shown_items += 1;
-                if row >= list_start - 4.0 && row + card_h <= bottom + 4.0 {
-                    let is_sel = selected_id == Some(entry.id.as_str());
-                    draw_gallery_item(
-                        ui,
-                        targets,
-                        row,
-                        &entry.title,
-                        if is_sel {
-                            "Local Gallery · Currently applied"
-                        } else {
-                            "Local Cape PNG · Tap to equip"
-                        },
-                        is_sel,
-                        Action::WardrobeSelect(*index),
-                        Some(Action::WardrobeRemove(*index)),
-                    );
-                }
-                row += card_step;
-            }
-        } else if !local.is_empty() {
+        if !local.is_empty() {
             let gap = 8.0;
             let columns = changer::columns(lw, 112.0, gap);
             let tile_w = (lw - gap * (columns as f32 - 1.0)) / columns as f32;
@@ -1099,7 +1092,12 @@ impl Wardrobe {
                     8.0,
                     theme.surface_dim,
                 );
-                if let Some(runs) = self.thumb(&entry.id) {
+                let thumb = if self.capes {
+                    self.cape_thumb(&entry.id)
+                } else {
+                    self.thumb(&entry.id)
+                };
+                if let Some(runs) = thumb {
                     let s = (stage[2] / 64.0).min(stage[3] / 96.0);
                     let ox = stage[0] + (stage[2] - 64.0 * s) * 0.5;
                     let oy = stage[1] + (stage[3] - 96.0 * s) * 0.5;
@@ -1113,6 +1111,16 @@ impl Wardrobe {
                             rgba(c[0], c[1], c[2], c[3]),
                         );
                     }
+                }
+                if !self.capes {
+                    let slim = self.library.model_of(&entry.id) == Model::Slim;
+                    let label = if slim { "Slim" } else { "Classic" };
+                    let pw = ui.measure(Face::SemiBold, 9.0, label) + 14.0;
+                    let pill = [stage[0] + stage[2] - pw - 4.0, stage[1] + 4.0, pw, 18.0];
+                    ui.rounded(pill[0], pill[1], pill[2], pill[3], 6.0, theme.surface);
+                    ui.border(pill[0], pill[1], pill[2], pill[3], 6.0, theme.border);
+                    ui.centered_fit(Face::SemiBold, 9.0, pill, theme.text_primary, label);
+                    targets.push((pill, Action::WardrobeSkinModel(*index)));
                 }
                 let title = ui.fit_text(Face::SemiBold, 11.0, &entry.title, r[2] - 16.0);
                 ui.text(
@@ -1166,9 +1174,9 @@ impl Wardrobe {
                     Face::Regular,
                     10.0,
                     if self.capes {
-                        "Tap '+ Import Cape PNG' above to add a 64×32 cape texture from your device."
+                        "Tap + to add a 64×32 cape texture from your device."
                     } else {
-                        "Tap '+ Import Skin PNG' above to add a 64×64 skin texture from your device."
+                        "Tap + to add a 64×64 skin texture from your device."
                     },
                     lw - 28.0,
                 );
@@ -1247,22 +1255,31 @@ impl Wardrobe {
 
         self.view = [list_start, bottom, (row + scroll + 38.0 - bottom).max(0.0)];
 
-        // Bottom status / feedback bar
-        if !self.note.is_empty() {
-            let banner_y = h - 36.0;
-            ui.rounded(x, banner_y, w, 28.0, 8.0, theme.surface_dim);
-            let note_col = if self.damaged {
-                theme.danger
-            } else {
-                theme.text_muted
-            };
-            let note = ui.fit_text(Face::Regular, 10.8, &self.note, w - 20.0);
+        if self.note != self.note_seen {
+            self.note_seen = self.note.clone();
+            self.note_at = Some(now);
+        }
+        let toast_live = self.damaged
+            || self
+                .note_at
+                .is_some_and(|t| now.duration_since(t).as_secs_f32() < TOAST_SECONDS);
+        if !self.note.is_empty() && toast_live {
+            let note = ui.fit_text(Face::Regular, 10.8, &self.note, (w - 40.0).min(420.0));
+            let tw = ui.measure(Face::Regular, 10.8, &note) + 24.0;
+            let ty = h - 40.0;
+            let tx = x + w - tw;
+            ui.rounded(tx, ty, tw, 30.0, 10.0, theme.surface_selected);
+            ui.border(tx, ty, tw, 30.0, 10.0, theme.border);
             ui.text(
                 Face::Regular,
                 10.8,
-                x + 10.0,
-                banner_y + 6.0,
-                note_col,
+                tx + 12.0,
+                ty + 8.0,
+                if self.damaged {
+                    theme.danger
+                } else {
+                    theme.text_primary
+                },
                 &note,
             );
         }
