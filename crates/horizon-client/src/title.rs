@@ -383,11 +383,9 @@ pub enum Action {
         selected: Vec<String>,
     },
 }
-pub type SkinPreview = std::sync::Arc<Vec<([f32; 4], [u8; 4])>>;
-
 pub struct Title {
     pub mode: Mode,
-    pub skin_preview: Option<SkinPreview>,
+    pub skin_stage: Option<String>,
     /// Direct Connection's address, synchronized with `options.txt`'s `lastServer`.
     pub last_server: String,
     /// `skipMultiplayerWarning`, synchronized with `options.txt` the same way.
@@ -664,10 +662,32 @@ fn version_label() -> String {
     format!("Horizon {} (Rust)", horizon_core::VANILLA_VERSION)
 }
 
-const SKIN_BOX: [f32; 2] = [80.0, 100.0];
-fn skin_box(w: f32, h: f32) -> (f32, f32) {
-    let cx = (w / 2.0).floor();
-    (cx - 100.0 - 8.0 - SKIN_BOX[0], (h / 4.0).floor() + 48.0)
+pub struct SkinLayout {
+    pub model: [f32; 4],
+    pub name_y: f32,
+    pub button: [f32; 4],
+}
+
+pub fn skin_layout(w: f32, h: f32) -> Option<SkinLayout> {
+    let menu_right = (w / 2.0).floor() + 100.0;
+    let room = w - menu_right;
+    if room < 110.0 {
+        return None;
+    }
+    let width = (room - 16.0).min(120.0);
+    let cx = (menu_right + room / 2.0).floor();
+    let top = (h / 4.0).floor() + 26.0;
+    let height = ((h - top - 70.0).min(150.0)).max(70.0);
+    Some(SkinLayout {
+        model: [cx - width / 2.0, top, cx + width / 2.0, top + height],
+        name_y: top - 14.0,
+        button: [
+            (cx - width / 2.0).floor(),
+            top + height + 6.0,
+            width.floor(),
+            20.0,
+        ],
+    })
 }
 
 impl Title {
@@ -697,7 +717,7 @@ impl Title {
         let now = std::time::Instant::now();
         Self {
             mode,
-            skin_preview: None,
+            skin_stage: None,
             last_server: String::new(),
             skip_multiplayer_warning: false,
             saves,
@@ -1665,9 +1685,11 @@ impl Title {
                     button.icon = Some((icon, 15.0));
                     buttons.push(button);
                 }
-                if self.skin_preview.is_some() && cx - 100.0 >= SKIN_BOX[0] + 12.0 {
-                    let (x, y) = skin_box(w, h);
-                    buttons.push(b(x, y + SKIN_BOX[1] + 4.0, SKIN_BOX[0], "Skin Changer", true, 20));
+                if self.skin_stage.is_some()
+                    && let Some(layout) = skin_layout(w, h)
+                {
+                    let [x, y, bw, _] = layout.button;
+                    buttons.push(b(x, y, bw, "Skin Changer", true, 20));
                 }
                 buttons
             }
@@ -2329,28 +2351,19 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
         match &self.mode {
             Mode::Main => {
                 draw_logo(atlas, batch, w);
-                if let Some(runs) = &self.skin_preview
-                    && (w / 2.0).floor() - 100.0 >= SKIN_BOX[0] + 12.0
+                if let Some(name) = &self.skin_stage
+                    && let Some(layout) = skin_layout(w, h)
                 {
-                    let (x, y) = skin_box(w, h);
-                    batch.fill(atlas, x - 1.0, y - 1.0, SKIN_BOX[0] + 2.0, SKIN_BOX[1] + 2.0, 0xFF3A_3A3A);
-                    batch.fill(atlas, x, y, SKIN_BOX[0], SKIN_BOX[1], 0x8C00_0000);
-                    let scale = ((SKIN_BOX[0] - 4.0) / 160.0).min((SKIN_BOX[1] - 4.0) / 240.0);
-                    let (ox, oy) = (
-                        (x + (SKIN_BOX[0] - 160.0 * scale) / 2.0).floor(),
-                        (y + (SKIN_BOX[1] - 240.0 * scale) / 2.0).floor(),
+                    let width = atlas.font.width_text(&Text::literal(name.as_str()));
+                    let cx = (layout.model[0] + layout.model[2]) / 2.0;
+                    batch.text_styled(
+                        atlas,
+                        &Text::literal(name.as_str()),
+                        (cx - width / 2.0).floor(),
+                        layout.name_y,
+                        u32::MAX,
+                        true,
                     );
-                    for (r, c) in runs.iter() {
-                        let x0 = (ox + r[0] * scale).floor();
-                        let y0 = (oy + r[1] * scale).floor();
-                        let x1 = (ox + (r[0] + r[2]) * scale).ceil();
-                        let y1 = (oy + (r[1] + r[3]) * scale).ceil();
-                        let color = (u32::from(c[3]) << 24)
-                            | (u32::from(c[0]) << 16)
-                            | (u32::from(c[1]) << 8)
-                            | u32::from(c[2]);
-                        batch.fill(atlas, x0, y0, x1 - x0, y1 - y0, color);
-                    }
                 }
                 if !hide_splash && let Some(splash) = self.splash.as_deref() {
                     let tw = HudBatch::text_width(atlas, splash);

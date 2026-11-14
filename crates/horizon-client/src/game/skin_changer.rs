@@ -231,7 +231,7 @@ impl Game<'_> {
         self.skin_changer_ui.error = None;
         self.skin_changer_ui.preview_tried = false;
         if let Some(title) = &mut self.title {
-            title.skin_preview = None;
+            title.skin_stage = None;
         }
         self.screen = if self.skin_changer_ui.from_title {
             Screen::Playing
@@ -241,16 +241,99 @@ impl Game<'_> {
     }
 
     pub(super) fn sync_title_skin_preview(&mut self) {
-        let Some(title) = &mut self.title else {
-            return;
-        };
-        if title.skin_preview.is_some() || self.skin_changer_ui.preview_tried {
+        if self.skin_changer_ui.preview_tried || self.title.is_none() {
             return;
         }
         self.skin_changer_ui.preview_tried = true;
-        title.skin_preview = Link::read(std::path::Path::new("."))
-            .and_then(|link| link.changer().ok())
-            .map(|mut changer| changer.stage());
+        if Link::read(std::path::Path::new(".")).is_none() {
+            return;
+        }
+        let name = self.own_profile_name();
+        if let Some(title) = &mut self.title {
+            title.skin_stage = Some(name);
+        }
+    }
+
+    pub(super) fn draw_title_player(&mut self, batch: &mut HudBatch, w: f32, h: f32) {
+        use horizon_client::mobs::{Mob, render};
+        let Some(layout) = self
+            .title
+            .as_ref()
+            .filter(|t| {
+                t.skin_stage.is_some() && matches!(t.mode, horizon_client::title::Mode::Main)
+            })
+            .and_then(|_| horizon_client::title::skin_layout(w, h))
+        else {
+            return;
+        };
+        self.flush_skin_slots();
+        const SKIN: &str = "horizon/offline_skin";
+        const CAPE: &str = "capes/local";
+        let (mut skin, mut slim, mut cape) = (None, false, None);
+        if let Some(appearance) = horizon_client::skins::appearance::current() {
+            if let Some((rgba, is_slim)) = &appearance.skin {
+                if !self.skin_slots.contains(SKIN) || !self.gui.atlas.sprites.contains_key(SKIN) {
+                    self.store_skin(SKIN.into(), rgba.clone());
+                }
+                skin = Some(SKIN.to_owned());
+                slim = *is_slim;
+            }
+            if !appearance.hide_cape
+                && let Some(rgba) = &appearance.cape
+            {
+                if !self.skin_slots.contains(CAPE) || !self.gui.atlas.sprites.contains_key(CAPE) {
+                    self.store_skin(CAPE.into(), rgba.clone());
+                }
+                cape = Some(CAPE.to_owned());
+            }
+        }
+        let Some(kind) = self.res.player_type().clone() else {
+            return;
+        };
+        let seconds = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0.0, |d| d.as_secs_f32());
+        let mut m = Mob::new(0, kind, horizon_core::geometry::Vec3::ZERO, 0.0);
+        m.skin = skin;
+        m.slim = slim;
+        m.cape = cape;
+        m.extra.model_scale = 0.0;
+        m.body_yaw = 180.0 + (seconds * 0.9).sin() * 24.0;
+        m.head_yaw = m.body_yaw;
+        m.head_pitch = 0.0;
+        m.previous = m.position;
+        m.previous_body_yaw = m.body_yaw;
+        m.previous_head_yaw = m.head_yaw;
+        m.previous_head_pitch = m.head_pitch;
+        let camera = glam::DVec3::new(m.position.x, m.position.y, m.position.z);
+        let atlas = &self.gui.atlas;
+        let lookup = |name: &str| atlas.sprites.get(name).map(|r| [r.u0, r.v0, r.u1, r.v1]);
+        let mut verts = Vec::new();
+        render::render_with(
+            &m,
+            1.0,
+            camera,
+            &lookup,
+            240 | 240 << 8,
+            self.res.mob_data(),
+            &self.player_armor_layers(),
+            &mut verts,
+        );
+        self.player_cape_geometry(&m, None, camera, 1.0, 240 | 240 << 8, &mut verts);
+        let [x0, y0, x1, y1] = layout.model;
+        let (cx, cy) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0);
+        let size = ((y1 - y0) * 0.94 / 1.8).min((x1 - x0) / 0.9);
+        let gui = glam::Mat4::from_translation(glam::Vec3::new(cx, cy, 0.0))
+            * glam::Mat4::from_scale(glam::Vec3::new(size, size, -size))
+            * glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.9 + 0.0625, 0.0))
+            * glam::Mat4::from_rotation_z(std::f32::consts::PI);
+        let quads = super::perspective::player_preview_quads(verts, gui, None, &atlas.sprites);
+        let start = batch.vertices.len();
+        for (_, p, uv, color) in quads {
+            batch.quad_3d(p, uv, color);
+        }
+        batch.clip_since(start, x0, y0, x1, y1);
+        batch.depth_since(start, [x0, y0, x1, y1]);
     }
 
     fn publish_skin_changer(&mut self) {
@@ -668,6 +751,13 @@ impl Game<'_> {
     pub(super) fn skin_changer_scroll(&mut self, _delta: f32) {}
     pub(super) fn open_skin_changer(&mut self) {}
     pub(super) fn sync_title_skin_preview(&mut self) {}
+    pub(super) fn draw_title_player(
+        &mut self,
+        _batch: &mut horizon_client::hud::HudBatch,
+        _w: f32,
+        _h: f32,
+    ) {
+    }
     pub(super) fn close_skin_changer(&mut self) {
         self.screen = super::Screen::Options;
     }

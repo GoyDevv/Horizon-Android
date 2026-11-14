@@ -1823,31 +1823,31 @@ fn a_finished_optimization_stamps_the_level_data() {
 }
 
 #[test]
-fn the_main_menu_offers_the_skin_changer_only_beside_a_preview_that_fits() {
+fn the_main_menu_offers_the_skin_changer_right_of_the_menu_when_there_is_room() {
     let mut f = Fixture::new();
     let ids = |f: &Fixture, w: f32| -> Vec<u8> {
         f.title.buttons(w, 262.0).iter().map(|b| b.id).collect()
     };
     assert!(!ids(&f, 480.0).contains(&20));
-    f.title.skin_preview = Some(std::sync::Arc::new(vec![(
-        [0.0, 0.0, 1.0, 1.0],
-        [1, 2, 3, 255],
-    )]));
+    f.title.skin_stage = Some("Steve".into());
     let buttons = f.title.buttons(480.0, 262.0);
     let skin = buttons.iter().find(|b| b.id == 20).expect("skin button");
     let singleplayer = buttons.iter().find(|b| b.id == 1).unwrap();
     assert!(
-        skin.x + skin.w <= singleplayer.x,
-        "beside the menu, not over it"
+        skin.x >= singleplayer.x + singleplayer.w,
+        "right of the menu, not over it"
     );
-    assert!(
-        skin.y > singleplayer.y,
-        "below the preview, which starts at the menu's top"
-    );
-    assert!(skin.x >= 0.0);
+    assert!(skin.x + skin.w <= 480.0);
+    let layout = horizon_client_skin_layout(480.0, 262.0);
+    assert!(layout.model[3] <= skin.y, "the button sits below the model");
+    assert!(layout.name_y < layout.model[1], "the name sits above it");
     assert!(
         !ids(&f, 320.0).contains(&20),
         "no room beside the menu at 320 wide"
     );
     assert!(matches!(f.title.mode, Mode::Main));
+}
+
+fn horizon_client_skin_layout(w: f32, h: f32) -> super::SkinLayout {
+    super::skin_layout(w, h).expect("room")
 }

@@ -8132,6 +8132,7 @@ impl Game<'_> {
                     self.settings.file.bool("hideSplashTexts"),
                 );
             }
+            self.draw_title_player(&mut batch, w, h);
             self.draw_toasts(&mut batch, false);
             self.draw_tutorial_toasts(&mut batch, false);
             self.draw_pack_toasts(&mut batch, false);
