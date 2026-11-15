@@ -338,7 +338,7 @@ class LauncherOverhaulTests(unittest.TestCase):
 
         # Main Launcher "Launching..." state & Virtual Mouse Speed slider
         self.assertIn("pub(super) launching: bool,", launcher)
-        self.assertIn('"Launching..."', launcher_pages)
+        self.assertIn('"Starting Minecraft 26.3"', launcher_pages)
         self.assertIn("pub mouse_speed_dragging: bool,", touch_ui)
 
 
@@ -758,7 +758,7 @@ class LauncherOverhaulTests(unittest.TestCase):
         self.assertIn('"Send Key (Keyboard / Mouse / Action)"', touch_ui)
 
         # 5. Homepage shows selected Renderer mode and downloaded version Changelogs
-        self.assertIn("Renderer: {}", launcher_pages)
+        self.assertIn('"Renderer"', launcher_pages)
         self.assertNotIn("CHANGELOG — MINECRAFT 26.3", launcher_pages)
 
         # 6. Duplicate control preset name confirmation dialog (Save to replace or Cancel)
@@ -1407,7 +1407,7 @@ class LauncherOverhaulTests(unittest.TestCase):
         # sunset art and a compact Play button, and the config chips run along the bottom.
         self.assertNotIn('"{n} mods loaded"', lp_rs)
         self.assertIn("ui.draw_horizon_sunset(art[0], art[1], art[2], art[3]);", lp_rs)
-        self.assertIn('"Renderer: {}"', lp_rs)
+        self.assertIn('"Renderer"', lp_rs)
         self.assertIn("ui.horizon_mark(18.0, 12.0, 28.0);", lp_rs)
         self.assertNotIn("Horizon Mod Engine", lp_rs)
         self.assertNotIn("Action::Discord", lp_rs)

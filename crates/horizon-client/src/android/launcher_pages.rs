@@ -102,6 +102,7 @@ pub(crate) struct AnimState {
     pub section_expand: [f32; 3],
     pub theme_pulse: f32,
     pub intro_start: Option<std::time::Instant>,
+    pub launch_started: Option<std::time::Instant>,
     pub intro_elapsed: f32,
     pub intro_done: bool,
     pub switches: std::collections::HashMap<String, f32>,
@@ -129,6 +130,7 @@ impl Default for AnimState {
             section_expand: [0.0; 3],
             theme_pulse: 1.0,
             intro_start: Some(std::time::Instant::now()),
+            launch_started: None,
             intro_elapsed: 0.0,
             intro_done: false,
             switches: std::collections::HashMap::new(),
@@ -1628,7 +1630,7 @@ impl Launcher {
                 } else {
                     16.0
                 };
-                let chip_h = 28.0;
+                let chip_h = 46.0;
                 let total_avail_h = (h - card_y - bottom_reserve).clamp(210.0, 360.0);
                 let hero_h = (total_avail_h - chip_h - 10.0).max(120.0);
                 let chip_y = card_y + hero_h + 10.0;
@@ -1660,7 +1662,7 @@ impl Launcher {
                 );
 
                 // Play split button, bottom-left of the hero.
-                let is_launching = self.launching || self.session_worker.is_some();
+                let is_launching = self.launching;
                 let split_total_w = match (installed, compact) {
                     (true, true) => 176.0,
                     (true, false) => 208.0,
@@ -1689,27 +1691,17 @@ impl Launcher {
                         1.5,
                         my3_accent(),
                     );
-                    ui.m3_wavy_circular_spinner(
-                        split_x + 22.0,
-                        split_y + 16.0,
-                        7.0,
-                        self.anim.shimmer_phase,
-                    );
-                    ui.m3_wavy_progress(
-                        split_x + 12.0,
-                        split_y + 32.0,
-                        (split_total_w - 24.0).max(40.0),
-                        5.5,
-                        0.68,
-                        self.anim.shimmer_phase,
-                        false,
-                    );
+                    let spin = self
+                        .anim
+                        .launch_started
+                        .map_or(0.0, |t| (t.elapsed().as_secs_f32() * 0.9) % 1.0);
+                    ui.m3_wavy_circular_spinner(split_x + 26.0, split_y + split_h * 0.5, 9.0, spin);
                     ui.centered_fit(
                         Face::SemiBold,
                         14.0,
-                        [split_x + 34.0, split_y + 3.0, split_total_w - 44.0, 24.0],
+                        [split_x + 44.0, split_y, split_total_w - 54.0, split_h],
                         my3_text(),
-                        "Launching...",
+                        "Starting...",
                     );
                 } else {
                     let play_label = if installed {
@@ -1766,45 +1758,104 @@ impl Launcher {
                     &hero_sub,
                 );
 
-                // 2. Interactive configuration chips along the bottom (renderer, FPS mode, controls).
-                let renderer_tag = format!("Renderer: {}", self.catalog.config.renderer.label());
-                let fps_tag = if self.catalog.config.battery_perf_mode {
-                    "FPS: 60 Hz Battery".to_owned()
-                } else if self.catalog.config.max_fps_mode {
-                    "FPS: Max Uncapped (260)".to_owned()
-                } else {
-                    "FPS: 120 Hz Balanced".to_owned()
+                let renderer_value = match self.catalog.config.renderer {
+                    crate::catalog::RendererMode::Vulkan => "Vulkan",
+                    crate::catalog::RendererMode::OpenGl => "OpenGL ES",
+                    crate::catalog::RendererMode::VulkanCompatibility => "Vulkan compat",
                 };
-                let ctrl_tag = format!(
-                    "Controls: {} ({})",
-                    touch_cfg.control_style.label(),
+                let fps_value = if self.catalog.config.battery_perf_mode {
+                    "60 Hz · Battery"
+                } else if self.catalog.config.max_fps_mode {
+                    "Uncapped"
+                } else {
+                    "120 Hz · Balanced"
+                };
+                let controls_value = format!(
+                    "{} · {}",
+                    match touch_cfg.control_style {
+                        horizon_client::touch::ControlStyle::Mcpe => "MCPE",
+                        horizon_client::touch::ControlStyle::GoyControl => "GoyControl",
+                    },
                     touch_cfg.preset_name
                 );
-                let mut chip_x = content_x;
-                for (lbl, act, hi, ic) in [
-                    (renderer_tag.as_str(), Action::Renderer, true, Icon::Monitor),
+                let tile_gap = 8.0;
+                let tile_w = ((content_w - tile_gap * 2.0) / 3.0).max(80.0);
+                for (i, (caption, value, act, hi, ic)) in [
                     (
-                        fps_tag.as_str(),
+                        "Renderer",
+                        renderer_value.to_owned(),
+                        Action::Renderer,
+                        false,
+                        Icon::Monitor,
+                    ),
+                    (
+                        "Frame rate",
+                        fps_value.to_owned(),
                         Action::ToggleMaxFpsMode,
                         self.catalog.config.max_fps_mode,
                         Icon::Play,
                     ),
                     (
-                        ctrl_tag.as_str(),
+                        "Controls",
+                        controls_value,
                         Action::SettingsCat(SettingsCategory::Controls),
                         false,
                         Icon::Gamepad,
                     ),
-                ] {
-                    let cw_chip = (ui.measure(Face::SemiBold, 10.5, lbl) + 34.0)
-                        .clamp(92.0, (content_w - 16.0) * 0.46);
-                    if chip_x + cw_chip > content_x + content_w {
-                        break;
-                    }
-                    let cr = [chip_x, chip_y, cw_chip, chip_h];
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    let tx = content_x + i as f32 * (tile_w + tile_gap);
+                    let cr = [tx, chip_y, tile_w, chip_h];
                     self.targets.push((cr, act));
-                    ui.m3_filter_chip(cr, lbl, hi, Some(ic));
-                    chip_x += cw_chip + 8.0;
+                    ui.rounded(
+                        tx,
+                        chip_y,
+                        tile_w,
+                        chip_h,
+                        14.0,
+                        if hi {
+                            my3_accent_soft()
+                        } else {
+                            my3_surface_high()
+                        },
+                    );
+                    ui.stroke_rounded(
+                        tx,
+                        chip_y,
+                        tile_w,
+                        chip_h,
+                        14.0,
+                        1.0,
+                        if hi { my3_accent() } else { my3_border() },
+                    );
+                    ui.icon(
+                        ic,
+                        tx + 10.0,
+                        chip_y + (chip_h - 18.0) * 0.5,
+                        18.0,
+                        my3_accent(),
+                    );
+                    let text_x = tx + 36.0;
+                    let text_w = (tile_w - 44.0).max(24.0);
+                    ui.text(
+                        Face::Medium,
+                        10.5,
+                        text_x,
+                        chip_y + 6.0,
+                        my3_muted(),
+                        caption,
+                    );
+                    let fitted = ui.fit_text(Face::SemiBold, 12.5, &value, text_w);
+                    ui.text(
+                        Face::SemiBold,
+                        12.5,
+                        text_x,
+                        chip_y + 22.0,
+                        my3_text(),
+                        &fitted,
+                    );
                 }
             }
         } else if page == Page::Skins {
@@ -2324,6 +2375,66 @@ impl Launcher {
                     self.anim.toast_anim,
                 );
             }
+        }
+
+        if self.launching {
+            let started = *self
+                .anim
+                .launch_started
+                .get_or_insert_with(std::time::Instant::now);
+            let t = started.elapsed().as_secs_f32();
+            let reduced = horizon_client::ui_theme::motion::reduced_motion();
+            ui.rounded(0.0, 0.0, w, h, 0.0, color::with_alpha(my3_bg(), 0.86));
+            self.targets.push((
+                [0.0, 0.0, w.max(4000.0), h.max(4000.0)],
+                Action::FmDismissMenu,
+            ));
+            let card_w = (w - 32.0).clamp(220.0, 340.0);
+            let card_h = 196.0;
+            let card_x = (w - card_w) * 0.5;
+            let card_y = ((h - card_h) * 0.5).max(8.0);
+            ui.rounded(card_x, card_y, card_w, card_h, 24.0, my3_surface_high());
+            ui.stroke_rounded(card_x, card_y, card_w, card_h, 24.0, 1.0, my3_border());
+            ui.m3_wavy_circular_spinner(
+                card_x + card_w * 0.5,
+                card_y + 50.0,
+                24.0,
+                (t * 0.9) % 1.0,
+            );
+            ui.centered_fit(
+                Face::SemiBold,
+                17.0,
+                [card_x + 16.0, card_y + 88.0, card_w - 32.0, 26.0],
+                my3_text(),
+                "Starting Minecraft 26.3",
+            );
+            let stage = if self.catalog.status.is_empty() {
+                "Starting the engine..."
+            } else {
+                self.catalog.status.as_str()
+            };
+            let stage = ui.fit_text(Face::Regular, 12.5, stage, card_w - 40.0);
+            ui.centered_fit(
+                Face::Regular,
+                12.5,
+                [card_x + 20.0, card_y + 118.0, card_w - 40.0, 20.0],
+                my3_muted(),
+                &stage,
+            );
+            let bar_x = card_x + 24.0;
+            let bar_w = card_w - 48.0;
+            let bar_y = card_y + 158.0;
+            let bar_h = 8.0;
+            ui.rounded(bar_x, bar_y, bar_w, bar_h, bar_h * 0.5, my3_track());
+            let seg_w = bar_w * 0.38;
+            let cycle = if reduced { 0.5 } else { (t * 0.75) % 1.0 };
+            let eased = cycle * cycle * (3.0 - 2.0 * cycle);
+            let seg_x = bar_x - seg_w + (bar_w + seg_w) * eased;
+            ui.clipped([bar_x, bar_y, bar_w, bar_h], |ui| {
+                ui.rounded(seg_x, bar_y, seg_w, bar_h, bar_h * 0.5, my3_accent());
+            });
+        } else {
+            self.anim.launch_started = None;
         }
 
         ui.set_stagger_transition(1.0, 0.0, 0.0);
