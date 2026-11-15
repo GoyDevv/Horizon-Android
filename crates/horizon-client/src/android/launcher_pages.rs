@@ -1329,7 +1329,7 @@ impl Launcher {
         ui.draw_theme_background(0.0, 0.0, w, h, &active_th);
 
         // ---- Top Header Bar (brand lockup ... account pill) ----
-        ui.horizon_logo(18.0, 12.0, 28.0);
+        ui.horizon_mark(18.0, 12.0, 28.0);
         let account_name = self
             .login
             .profile
@@ -1628,39 +1628,48 @@ impl Launcher {
                 } else {
                     16.0
                 };
+                let chip_h = 28.0;
                 let total_avail_h = (h - card_y - bottom_reserve).clamp(210.0, 360.0);
-                let hero_h = (total_avail_h * 0.44).clamp(96.0, 126.0);
-                let bento_y = card_y + hero_h + 10.0;
-                let bento_h = (total_avail_h - hero_h - 10.0).max(108.0);
+                let hero_h = (total_avail_h - chip_h - 10.0).max(120.0);
+                let chip_y = card_y + hero_h + 10.0;
 
-                // 1. Jetpack Compose Material You Hero Banner Card (`ElevatedCard`) with integrated Split Button CTA
+                // 1. Hero banner: the Horizon sunset behind the title, one compact Play split button.
                 ui.m3_tonal_card(content_x, card_y, content_w, hero_h, 18.0, true);
-                ui.rounded(
-                    content_x + 16.0,
-                    card_y + 14.0,
-                    46.0,
-                    46.0,
-                    14.0,
-                    my3_accent_soft(),
-                );
-                ui.icon(
-                    Icon::HorizonLogo,
-                    content_x + 28.0,
-                    card_y + 26.0,
-                    22.0,
-                    my3_accent(),
+                // The art sits 6dp inside the card so its square corners stay within the rounded ones.
+                let art = [
+                    content_x + 6.0,
+                    card_y + 6.0,
+                    content_w - 12.0,
+                    hero_h - 12.0,
+                ];
+                ui.clipped(art, |ui| {
+                    ui.draw_horizon_sunset(art[0], art[1], art[2], art[3]);
+                });
+                // Scrim: fades the art into the page colour so the title and button keep their contrast.
+                let scrim_y = art[1] + art[3] * 0.30;
+                ui.fill_gradient(
+                    art[0],
+                    scrim_y,
+                    art[2],
+                    art[1] + art[3] - scrim_y,
+                    horizon_client::ui_theme::GradientDirection::Vertical,
+                    color::with_alpha(my3_bg(), 0.0),
+                    color::with_alpha(my3_bg(), 0.88),
+                    None,
+                    16,
                 );
 
-                // Primary Play Split Button integrated inside the top-right of the Hero Banner Card
+                // Play split button, bottom-left of the hero.
                 let is_launching = self.launching || self.session_worker.is_some();
-                let split_total_w = if compact {
-                    (content_w * 0.48).clamp(176.0, 240.0)
-                } else {
-                    (content_w * 0.44).clamp(248.0, 316.0)
+                let split_total_w = match (installed, compact) {
+                    (true, true) => 176.0,
+                    (true, false) => 208.0,
+                    (false, true) => 214.0,
+                    (false, false) => 240.0,
                 };
-                let split_x = content_x + content_w - split_total_w - 16.0;
-                let split_y = card_y + 14.0;
                 let split_h = 44.0;
+                let split_x = content_x + 18.0;
+                let split_y = card_y + hero_h - 16.0 - split_h;
 
                 if is_launching && installed {
                     ui.rounded(
@@ -1704,11 +1713,11 @@ impl Launcher {
                     );
                 } else {
                     let play_label = if installed {
-                        "Play Minecraft 26.3"
+                        "Play"
                     } else if self.error.is_some() {
-                        "Retry installation"
+                        "Retry install"
                     } else {
-                        "Download Minecraft 26.3"
+                        "Download"
                     };
                     let prof_label = format!("Profile {} v", self.catalog.config.profile + 1);
                     let (lead_r, trail_r) = ui.m3_split_button(
@@ -1725,48 +1734,39 @@ impl Launcher {
                     self.targets.push((trail_r, Action::Profile));
                 }
 
-                let hero_text_max = (split_x - (content_x + 74.0) - 12.0).max(110.0);
-                let hero_title = ui.fit_text(
-                    Face::SemiBold,
-                    20.5,
-                    if installed {
-                        "Ready to play"
-                    } else if compact {
-                        "Your Java worlds"
-                    } else {
-                        "Your Java worlds, on Android"
-                    },
-                    hero_text_max,
-                );
+                // Title and subtitle sit above the button.
+                let hero_text_w = (content_w - 36.0).max(110.0);
+                let sub_y = split_y - 8.0 - 16.0;
+                let title_y = sub_y - 4.0 - 34.0;
+                let hero_title = ui.fit_text(Face::SemiBold, 30.0, "Minecraft 26.3", hero_text_w);
                 ui.text(
                     Face::SemiBold,
-                    20.5,
-                    content_x + 74.0,
-                    card_y + 12.0,
+                    30.0,
+                    content_x + 18.0,
+                    title_y,
                     my3_text(),
                     &hero_title,
                 );
                 let hero_sub = ui.fit_text(
                     Face::Regular,
                     12.5,
-                    &format!(
-                        "Minecraft 26.3 • Profile {} • {}",
-                        self.catalog.config.profile + 1,
-                        self.catalog.config.renderer.label()
-                    ),
-                    hero_text_max,
+                    &if installed {
+                        format!("Profile {}", self.catalog.config.profile + 1)
+                    } else {
+                        "Your Java worlds, on Android".to_owned()
+                    },
+                    hero_text_w,
                 );
                 ui.text(
                     Face::Regular,
                     12.5,
-                    content_x + 74.0,
-                    card_y + 38.0,
+                    content_x + 18.0,
+                    sub_y,
                     my3_muted(),
                     &hero_sub,
                 );
 
-                // Interactive Active Configuration Chips (Renderer Mode, FPS Mode, Control System)
-                let chip_y = card_y + hero_h - 32.0;
+                // 2. Interactive configuration chips along the bottom (renderer, FPS mode, controls).
                 let renderer_tag = format!("Renderer: {}", self.catalog.config.renderer.label());
                 let fps_tag = if self.catalog.config.battery_perf_mode {
                     "FPS: 60 Hz Battery".to_owned()
@@ -1780,7 +1780,7 @@ impl Launcher {
                     touch_cfg.control_style.label(),
                     touch_cfg.preset_name
                 );
-                let mut chip_x = content_x + 16.0;
+                let mut chip_x = content_x;
                 for (lbl, act, hi, ic) in [
                     (renderer_tag.as_str(), Action::Renderer, true, Icon::Monitor),
                     (
@@ -1797,107 +1797,14 @@ impl Launcher {
                     ),
                 ] {
                     let cw_chip = (ui.measure(Face::SemiBold, 10.5, lbl) + 34.0)
-                        .clamp(92.0, (content_w - 32.0) * 0.46);
-                    if chip_x + cw_chip > content_x + content_w - 12.0 {
+                        .clamp(92.0, (content_w - 16.0) * 0.46);
+                    if chip_x + cw_chip > content_x + content_w {
                         break;
                     }
-                    let cr = [chip_x, chip_y, cw_chip, 24.0];
+                    let cr = [chip_x, chip_y, cw_chip, chip_h];
                     self.targets.push((cr, act));
                     ui.m3_filter_chip(cr, lbl, hi, Some(ic));
                     chip_x += cw_chip + 8.0;
-                }
-
-                let active_mods = self
-                    .catalog
-                    .local
-                    .iter()
-                    .filter(|i| i.kind == horizon_client::content_files::Kind::Mods && i.enabled)
-                    .count()
-                    + self.catalog.bundled_enabled.len();
-                let active_shaders = self
-                    .catalog
-                    .local
-                    .iter()
-                    .filter(|i| i.kind == horizon_client::content_files::Kind::Shaders && i.enabled)
-                    .count();
-                let mods_h = 76.0;
-                let mods_y = bento_y;
-                ui.m3_tonal_card(content_x, mods_y, content_w, mods_h, 16.0, false);
-                ui.rounded(
-                    content_x + 14.0,
-                    mods_y + 24.0,
-                    28.0,
-                    28.0,
-                    8.0,
-                    my3_accent_soft(),
-                );
-                ui.icon(
-                    Icon::Mods,
-                    content_x + 20.0,
-                    mods_y + 30.0,
-                    16.0,
-                    my3_accent(),
-                );
-                let buttons_w = if content_w >= 400.0 { 232.0 } else { 118.0 };
-                let text_w = (content_w - 62.0 - buttons_w - 14.0).max(80.0);
-                let headline = match active_mods {
-                    0 => "No mods loaded".to_owned(),
-                    1 => "1 mod loaded".to_owned(),
-                    n => format!("{n} mods loaded"),
-                };
-                let headline = ui.fit_text(Face::SemiBold, 14.0, &headline, text_w);
-                ui.text(
-                    Face::SemiBold,
-                    14.0,
-                    content_x + 52.0,
-                    mods_y + 21.0,
-                    my3_text(),
-                    &headline,
-                );
-                if active_shaders > 0 {
-                    let shaders = ui.fit_text(
-                        Face::Regular,
-                        11.0,
-                        &format!("{active_shaders} shader pack active"),
-                        text_w,
-                    );
-                    ui.text(
-                        Face::Regular,
-                        11.0,
-                        content_x + 52.0,
-                        mods_y + 41.0,
-                        my3_muted(),
-                        &shaders,
-                    );
-                }
-                let buttons_x = content_x + content_w - buttons_w - 14.0;
-                let button_y = mods_y + (mods_h - 30.0) * 0.5;
-                if content_w >= 400.0 {
-                    button(
-                        &mut ui,
-                        &mut self.targets,
-                        [buttons_x, button_y, 112.0, 30.0],
-                        "Installed",
-                        Action::Page(Page::Installed),
-                        true,
-                    );
-                    button(
-                        &mut ui,
-                        &mut self.targets,
-                        [buttons_x + 120.0, button_y, 112.0, 30.0],
-                        "Browse Mods",
-                        Action::Page(Page::Mods),
-                        false,
-                    );
-                } else {
-                    button(
-                        &mut ui,
-                        &mut self.targets,
-                        [buttons_x, button_y, buttons_w, 30.0],
-                        "Mods",
-                        Action::Page(Page::Installed),
-                        true,
-                    );
                 }
             }
         } else if page == Page::Skins {

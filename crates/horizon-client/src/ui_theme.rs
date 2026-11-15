@@ -1465,6 +1465,49 @@ impl<'a> Ui<'a> {
         self.draw_horizon_logo_art(x, y, size, 1.0, 1.0);
     }
 
+    /// The launcher header's mark: an accent tile with a sun cut into three slices over a
+    /// horizon line, in the active theme's accent colours.
+    pub fn horizon_mark(&mut self, x: f32, y: f32, size: f32) {
+        let theme = active_theme();
+        let u = size / 32.0;
+        self.rounded(x, y, size, size, 9.0 * u, theme.accent);
+        // The sun (centre 16,17, radius 8.5 on a 32-unit grid) as three horizontal slices,
+        // each built from thin rows whose width follows the circle.
+        let (cx, cy, r) = (16.0_f32, 17.0_f32, 8.5_f32);
+        for (top, bottom) in [(8.0_f32, 13.0_f32), (14.6, 18.0), (19.6, 21.8)] {
+            let mut row = top;
+            while row < bottom {
+                let step = (bottom - row).min(0.5);
+                let dy = row + step * 0.5 - cy;
+                let half = (r * r - dy * dy).max(0.0).sqrt();
+                if half > 0.0 {
+                    self.fill(
+                        x + (cx - half) * u,
+                        y + row * u,
+                        half * 2.0 * u,
+                        step * u,
+                        theme.on_accent,
+                    );
+                }
+                row += step;
+            }
+        }
+        self.fill(
+            x + 6.0 * u,
+            y + 24.0 * u,
+            20.0 * u,
+            2.0 * u,
+            color::with_alpha(theme.on_accent, 0.55),
+        );
+        self.fill(
+            x + 10.0 * u,
+            y + 27.5 * u,
+            12.0 * u,
+            1.5 * u,
+            color::with_alpha(theme.on_accent, 0.30),
+        );
+    }
+
     /// Draws the pixel-art Horizon sunset logo. `reveal` (0..1) uncovers it from the
     /// bottom row up; `alpha` fades the whole mark.
     pub fn draw_horizon_logo_art(&mut self, x: f32, y: f32, size: f32, alpha: f32, reveal: f32) {

@@ -1203,7 +1203,13 @@ class LauncherOverhaulTests(unittest.TestCase):
 
         # 3. GoyControl Grid Snap toggle in floating pod & inspector + magnetic neighbor edge-sticking
         self.assertIn("pub fn snap_button_to_neighbors_and_grid(", touch_ui)
-        self.assertIn("(Some(Icon::Crosshair), grid_lbl, 74.0, true, tc.settings.snap_to_grid)", touch_ui)
+        # rustfmt may split the tuple over several lines, so compare with whitespace and
+        # trailing commas normalised.
+        touch_ui_flat = re.sub(r",?\s*\)", ")", re.sub(r"\(\s+", "(", re.sub(r"\s+", " ", touch_ui)))
+        self.assertIn(
+            "(Some(Icon::Crosshair), grid_lbl, 74.0, true, tc.settings.snap_to_grid)",
+            touch_ui_flat,
+        )
         self.assertIn('"Snap to Grid & Neighbor Buttons: ON"', touch_ui)
         self.assertIn("let ew = (ww - 24.0 - 30.0) / 4.0;", touch_ui)
         self.assertIn("let bw = (ww - 24.0 - 30.0) / 4.0;", touch_ui)
@@ -1397,12 +1403,17 @@ class LauncherOverhaulTests(unittest.TestCase):
         # 3. Verify Jetpack Compose Material You Dashboard (Hero Split Button, mods summary card, Stadium Nav Rail)
         lp_rs = _read_repo_file("crates/horizon-client/src/android/launcher_pages.rs")
         self.assertIn("ui.m3_tonal_card(content_x, card_y, content_w, hero_h, 18.0, true);", lp_rs)
-        self.assertIn('"{n} mods loaded"', lp_rs)
+        # The Play page redesign dropped the mods summary card: the hero banner carries the
+        # sunset art and a compact Play button, and the config chips run along the bottom.
+        self.assertNotIn('"{n} mods loaded"', lp_rs)
+        self.assertIn("ui.draw_horizon_sunset(art[0], art[1], art[2], art[3]);", lp_rs)
+        self.assertIn('"Renderer: {}"', lp_rs)
+        self.assertIn("ui.horizon_mark(18.0, 12.0, 28.0);", lp_rs)
         self.assertNotIn("Horizon Mod Engine", lp_rs)
         self.assertNotIn("Action::Discord", lp_rs)
         self.assertNotIn("Action::Repository", lp_rs)
         self.assertNotIn("RELEASE HIGHLIGHTS", lp_rs)
-        self.assertIn('"Browse Mods"', lp_rs)
+        self.assertNotIn('"Browse Mods"', lp_rs)
         self.assertIn('"Build Native .so"', lp_rs)
 
         compose_kt = _read_repo_file("packaging/android/compose/HorizonComposeLauncher.kt")
