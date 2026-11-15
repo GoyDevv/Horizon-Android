@@ -670,33 +670,21 @@ impl TouchControls {
                             (-1, 0) => state.left[0] < -0.2,
                             _ => state.left[0] > 0.2,
                         };
-                        let rect = [
-                            x + cell * (dx + 1) as f32,
-                            y + cell * (dy + 1) as f32,
-                            cell,
-                            cell,
-                        ];
-                        if !starling_dpad(b, a, name, rect, pressed, color) {
-                            fitted_sprite(
-                                b,
-                                a,
-                                &format!(
-                                    "controls/{name}{}",
-                                    if pressed { "_pressed" } else { "" }
-                                ),
-                                rect,
-                                color,
-                            );
-                        }
-                    }
-                    let starling_pad = a
-                        .sprites
-                        .contains_key(&crate::hud::touch_sprite_key("dpad_middle"));
-                    if starling_pad {
-                        starling_dpad(b, a, "middle", [x + cell, y + cell, cell, cell], false, color);
+                        fitted_sprite(
+                            b,
+                            a,
+                            &format!("controls/{name}{}", if pressed { "_pressed" } else { "" }),
+                            [
+                                x + cell * (dx + 1) as f32,
+                                y + cell * (dy + 1) as f32,
+                                cell,
+                                cell,
+                            ],
+                            color,
+                        );
                     }
                     // Vanilla shows the diagonal keys while their adjoining arrow is held.
-                    if !starling_pad && state.left[1].abs() > 0.2 {
+                    if state.left[1].abs() > 0.2 {
                         let (dy, prefix) = if state.left[1] > 0.0 {
                             (0, "up")
                         } else {
@@ -720,7 +708,7 @@ impl TouchControls {
                             );
                         }
                     }
-                } else if !starling_stick(b, a, [x, y, size, size], state.left, color) {
+                } else {
                     sprite(b, a, "ui/joystick_frame", [x, y, size, size], color);
                     sprite(
                         b,
@@ -741,9 +729,6 @@ impl TouchControls {
                         .fingers
                         .values()
                         .any(|(_, point)| layout::contains(p.rect(self.aspect()), *point));
-                if starling_button(self, b, a, control, [x, y, size, size], pressed, color) {
-                    continue;
-                }
                 let themed = match control {
                     Control::Chat => Some("chat"),
                     Control::Pause => Some("pause"),
@@ -1668,18 +1653,19 @@ pub fn draw_single_mcpe_control(
                 (1, 0, "right"),
                 (0, 1, "down"),
             ] {
-                let rect = [
-                    cx + cell * (dx + 1) as f32,
-                    cy + cell * (dy + 1) as f32,
-                    cell,
-                    cell,
-                ];
-                if !starling_dpad(b, a, name, rect, false, color) {
-                    fitted_sprite(b, a, &format!("controls/{name}"), rect, color);
-                }
+                fitted_sprite(
+                    b,
+                    a,
+                    &format!("controls/{name}"),
+                    [
+                        cx + cell * (dx + 1) as f32,
+                        cy + cell * (dy + 1) as f32,
+                        cell,
+                        cell,
+                    ],
+                    color,
+                );
             }
-            starling_dpad(b, a, "middle", [cx + cell, cy + cell, cell, cell], false, color);
-        } else if starling_stick(b, a, [cx, cy, size, size], [0.0, 0.0], color) {
         } else if a.sprites.contains_key("gui/bedrock/ui/joystick_frame") {
             sprite(b, a, "ui/joystick_frame", [cx, cy, size, size], color);
             sprite(
@@ -1721,9 +1707,6 @@ pub fn draw_single_mcpe_control(
         return;
     }
     let bounds = [cx, cy, size, size];
-    if starling_button(tc, b, a, control, bounds, pressed, color) {
-        return;
-    }
     let themed = match control {
         Control::Chat => Some("chat"),
         Control::Pause => Some("pause"),
@@ -2014,97 +1997,6 @@ pub fn draw_goy_joystick(
     if js.stick_stroke > 0.1 {
         ring(b, a, kcenter, kr, stick_stroke);
     }
-}
-
-/// Draws one of the built-in Starling button sprites (`pressed` picks the `_pressed` art when it exists).
-fn starling_sprite(
-    b: &mut HudBatch,
-    a: &HudAtlas,
-    name: &str,
-    [x, y, w, h]: [f32; 4],
-    pressed: bool,
-    color: u32,
-) -> bool {
-    let pressed_key = crate::hud::touch_sprite_key(&format!("{name}_pressed"));
-    let key = if pressed && a.sprites.contains_key(&pressed_key) {
-        pressed_key
-    } else {
-        crate::hud::touch_sprite_key(name)
-    };
-    let Some(rect) = a.sprites.get(&key).copied() else {
-        return false;
-    };
-    control_quad(b, a, x, y, w, h, rect, color);
-    true
-}
-
-/// The Starling art for an MCPE action button; false when it has none (or shows a live state icon).
-fn starling_button(
-    tc: &TouchControls,
-    b: &mut HudBatch,
-    a: &HudAtlas,
-    control: Control,
-    bounds: [f32; 4],
-    pressed: bool,
-    color: u32,
-) -> bool {
-    let state_icon = tc.swimming || tc.vertical_movement;
-    let name = match control {
-        Control::Attack => "attack",
-        Control::Use => "use",
-        Control::Jump if !state_icon && tc.settings.mode != Mode::Dpad => "jump",
-        Control::Sneak if !state_icon && !tc.mounted && tc.settings.mode != Mode::Dpad => "sneak",
-        Control::Chat => "chat",
-        Control::Debug => "debug",
-        Control::Perspective => "camera",
-        Control::Offhand => "offhand",
-        Control::Pause => "pause",
-        Control::Inventory => "inventory",
-        Control::Settings => {
-            let [x, y, w, h] = bounds;
-            if !starling_sprite(b, a, "custom_blank", bounds, pressed, color) {
-                return false;
-            }
-            let size = w.min(h);
-            fitted_sprite(
-                b,
-                a,
-                "ui/gear",
-                [x + size * 0.23, y + size * 0.23, size * 0.54, size * 0.54],
-                color,
-            );
-            return true;
-        }
-        _ => return false,
-    };
-    starling_sprite(b, a, name, bounds, pressed, color)
-}
-
-/// The Starling joystick: base plate with the knob pushed toward `stick` (each -1..1, up positive).
-fn starling_stick(b: &mut HudBatch, a: &HudAtlas, [x, y, w, h]: [f32; 4], stick: [f32; 2], color: u32) -> bool {
-    if !starling_sprite(b, a, "stick", [x, y, w, h], false, color) {
-        return false;
-    }
-    let knob = w.min(h) * 0.5;
-    starling_sprite(
-        b,
-        a,
-        "stick_knob",
-        [
-            x + (w - knob) * 0.5 + stick[0] * w * 0.25,
-            y + (h - knob) * 0.5 - stick[1] * h * 0.25,
-            knob,
-            knob,
-        ],
-        false,
-        color,
-    );
-    true
-}
-
-/// One cell of the Starling D-pad (`name` is up/down/left/right/middle).
-fn starling_dpad(b: &mut HudBatch, a: &HudAtlas, name: &str, rect: [f32; 4], pressed: bool, color: u32) -> bool {
-    starling_sprite(b, a, &format!("dpad_{name}"), rect, pressed, color)
 }
 
 fn fitted_sprite(b: &mut HudBatch, a: &HudAtlas, name: &str, [x, y, w, h]: [f32; 4], color: u32) {
