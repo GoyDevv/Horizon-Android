@@ -223,9 +223,39 @@ pub fn upgrade_older_world_with(
         )
         .into());
     }
+    make_world_writable(world);
     horizon_world::datafix::files::upgrade_world_with(world, progress)
         .map_err(|e| format!("upgrading {}: {e}", world.display()))?;
     Ok(())
+}
+
+/// Gives the owner read and write access to everything under `path`, which imported worlds
+/// can arrive without (archives and copied trees keep read-only modes).
+pub fn make_world_writable(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let Ok(meta) = std::fs::symlink_metadata(path) else {
+            return;
+        };
+        if meta.file_type().is_symlink() {
+            return;
+        }
+        let mode = meta.permissions().mode();
+        let wanted = if meta.is_dir() { 0o700 } else { 0o600 };
+        if mode & wanted != wanted {
+            let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode | wanted));
+        }
+        if meta.is_dir()
+            && let Ok(entries) = std::fs::read_dir(path)
+        {
+            for entry in entries.flatten() {
+                make_world_writable(&entry.path());
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = path;
 }
 /// Whether opening the world runs file fixes, which vanilla asks for a backup
 /// first (`BackupStatus.FILE_FIXING_REQUIRED`). Saves of 1.8 and before have no
@@ -6954,5 +6984,29 @@ mod tests {
             assert_eq!(preset.next().prev(), preset);
             assert_eq!(preset.prev().next(), preset);
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod writable_tests {
+    use super::make_world_writable;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn read_only_world_trees_become_writable_for_the_owner() {
+        let root = std::env::temp_dir().join(format!("horizon-writable-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let region = root.join("region");
+        std::fs::create_dir_all(&region).unwrap();
+        let file = region.join("r.0.0.mca");
+        std::fs::write(&file, b"x").unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o444)).unwrap();
+        std::fs::set_permissions(&region, std::fs::Permissions::from_mode(0o555)).unwrap();
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o555)).unwrap();
+        make_world_writable(&root);
+        assert_eq!(std::fs::metadata(&file).unwrap().permissions().mode() & 0o600, 0o600);
+        assert_eq!(std::fs::metadata(&region).unwrap().permissions().mode() & 0o700, 0o700);
+        assert_eq!(std::fs::metadata(&root).unwrap().permissions().mode() & 0o700, 0o700);
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }

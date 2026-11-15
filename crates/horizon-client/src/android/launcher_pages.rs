@@ -454,6 +454,7 @@ pub(super) enum Action {
     FmImportFolderHere,
     FmOpenNewFolder,
     FmToggleAddMenu,
+    FmDismissMenu,
     FmSubmitNewFolder,
     FmOpenRename(usize),
     FmOpenRenameSelected,
@@ -481,7 +482,7 @@ fn fm_icon_button(
     enabled: bool,
 ) {
     let [x, y, w, h] = rect;
-    ui.icon(icon, x + (w - 18.0) * 0.5, y + (h - 18.0) * 0.5, 18.0, tint);
+    ui.icon(icon, x + (w - 22.0) * 0.5, y + (h - 22.0) * 0.5, 22.0, tint);
     if enabled && let Some(c) = ui.clip_rect(rect) {
         targets.push((c, action));
     }
@@ -2593,7 +2594,15 @@ impl Launcher {
                     && point[0] <= rect[0] + rect[2]
                     && point[1] >= rect[1]
                     && point[1] <= rect[1] + rect[3]
-            }) {
+            }) && !matches!(
+                self.targets.iter().rev().find(|(rect, _)| {
+                    point[0] >= rect[0]
+                        && point[0] <= rect[0] + rect[2]
+                        && point[1] >= rect[1]
+                        && point[1] <= rect[1] + rect[3]
+                }),
+                Some((_, Action::FmDismissMenu))
+            ) {
                 let sc = horizon_client::ui_theme::motion::press_scale(true, 0.0);
                 let sw = *w * sc;
                 let sh = *h * sc;
@@ -2621,6 +2630,7 @@ impl Launcher {
             && self.drag.is_none()
             && let Some((action, time)) = self.feedback
             && time.elapsed() < std::time::Duration::from_millis(260)
+            && action != Action::FmDismissMenu
             && let Some(([x, y, w, h], _)) = self.targets.iter().find(|(_, a)| *a == action)
         {
             let p = (time.elapsed().as_secs_f32() / 0.26).clamp(0.0, 1.0);
@@ -3417,63 +3427,7 @@ impl Launcher {
             .as_ref()
             .map_or(0, |(v, _)| v.len());
         let danger = horizon_client::ui_theme::active_theme().danger;
-        if selecting {
-            let bar_h = 34.0;
-            ui.rounded(content_x, nav_y - 2.0, content_w, bar_h, 10.0, my3_nav_active());
-            ui.border(content_x, nav_y - 2.0, content_w, bar_h, 10.0, my3_accent());
-            fm_icon_button(
-                ui,
-                &mut self.targets,
-                [content_x + 2.0, nav_y - 2.0, 34.0, bar_h],
-                Icon::Close,
-                Action::FmClearSelection,
-                my3_text(),
-                true,
-            );
-            ui.text(
-                Face::SemiBold,
-                13.0,
-                content_x + 42.0,
-                nav_y + 6.0,
-                my3_text(),
-                &format!("{sel_count} selected"),
-            );
-            let mut tools: Vec<(Icon, Action, u32, bool)> = vec![
-                (Icon::SelectAll, Action::FmSelectAll, my3_text(), true),
-                (Icon::Copy, Action::FmCopy, my3_text(), true),
-                (Icon::Scissors, Action::FmCut, my3_text(), true),
-                (Icon::Share, Action::FmExportSelected, my3_text(), true),
-                (
-                    Icon::Pencil,
-                    Action::FmOpenRenameSelected,
-                    my3_text(),
-                    sel_count == 1,
-                ),
-                (
-                    Icon::Trash,
-                    Action::FmRequestDeleteSelected,
-                    danger,
-                    true,
-                ),
-            ];
-            if clip_count > 0 {
-                tools.insert(3, (Icon::Clipboard, Action::FmPaste, my3_accent(), true));
-            }
-            let tool_w = 36.0;
-            let mut tx = content_x + content_w - 4.0 - tool_w * tools.len() as f32;
-            for (icon, action, tint, enabled) in tools {
-                fm_icon_button(
-                    ui,
-                    &mut self.targets,
-                    [tx, nav_y - 2.0, tool_w, bar_h],
-                    icon,
-                    action,
-                    if enabled { tint } else { my3_muted() },
-                    enabled,
-                );
-                tx += tool_w;
-            }
-        } else {
+        {
             let has_back = !self.catalog.fm_back_stack.is_empty();
             let has_fwd = !self.catalog.fm_forward_stack.is_empty();
             let has_up = !self.catalog.fm_current_dir.is_empty();
@@ -3503,16 +3457,14 @@ impl Launcher {
 
         let add_w = 74.0;
         let paste_w = 92.0;
-        let right_cta_w = if selecting {
-            0.0
-        } else if clip_count > 0 {
+        let right_cta_w = if clip_count > 0 {
             add_w + paste_w + 8.0
         } else {
             add_w
         };
         let add_x = content_x + content_w - add_w;
         let add_rect = [add_x, nav_y, add_w, 30.0];
-        if !selecting {
+        {
             ui.rounded(
                 add_rect[0],
                 add_rect[1],
@@ -3549,7 +3501,7 @@ impl Launcher {
             }
         }
 
-        if !selecting {
+        {
             let bc_x = content_x + 110.0;
             let bc_w = (content_x + content_w - right_cta_w - 8.0 - bc_x).max(60.0);
             ui.rounded(bc_x, nav_y, bc_w, 30.0, 10.0, my3_surface());
@@ -3642,8 +3594,62 @@ impl Launcher {
             );
         }
 
+        if selecting {
+            let bar_y = root_y + 26.0 + 8.0;
+            let bar_h = 44.0;
+            ui.rounded(content_x, bar_y, content_w, bar_h, 10.0, my3_nav_active());
+            ui.border(content_x, bar_y, content_w, bar_h, 10.0, my3_accent());
+            fm_icon_button(
+                ui,
+                &mut self.targets,
+                [content_x + 4.0, bar_y, 40.0, bar_h],
+                Icon::Close,
+                Action::FmClearSelection,
+                my3_text(),
+                true,
+            );
+            ui.text(
+                Face::SemiBold,
+                15.0,
+                content_x + 52.0,
+                bar_y + 13.0,
+                my3_text(),
+                &format!("{sel_count} selected"),
+            );
+            let mut tools: Vec<(Icon, Action, u32, bool)> = vec![
+                (Icon::SelectAll, Action::FmSelectAll, my3_text(), true),
+                (Icon::Copy, Action::FmCopy, my3_text(), true),
+                (Icon::Scissors, Action::FmCut, my3_text(), true),
+                (Icon::Share, Action::FmExportSelected, my3_text(), true),
+                (
+                    Icon::Pencil,
+                    Action::FmOpenRenameSelected,
+                    my3_text(),
+                    sel_count == 1,
+                ),
+                (Icon::Trash, Action::FmRequestDeleteSelected, danger, true),
+            ];
+            if clip_count > 0 {
+                tools.insert(3, (Icon::Clipboard, Action::FmPaste, my3_accent(), true));
+            }
+            let tool_w = 46.0;
+            let mut tx = content_x + content_w - 4.0 - tool_w * tools.len() as f32;
+            for (icon, action, tint, enabled) in tools {
+                fm_icon_button(
+                    ui,
+                    &mut self.targets,
+                    [tx, bar_y, tool_w, bar_h],
+                    icon,
+                    action,
+                    if enabled { tint } else { my3_muted() },
+                    enabled,
+                );
+                tx += tool_w;
+            }
+        }
+
         // Scrollable File & Directory Rows
-        let top = 166.0 + slide_y;
+        let top = if selecting { 212.0 } else { 166.0 } + slide_y;
         let bottom = h - 42.0;
         if self.catalog.fm_entries.is_empty() {
             self.list_view = None;
@@ -3695,7 +3701,11 @@ impl Launcher {
             let y = top + idx as f32 * row_h - self.catalog.scroll;
             let card_h = 46.0;
             let selected = self.catalog.fm_selected.contains(&entry.rel_path);
-            let tile_x = if selecting { content_x + 40.0 } else { content_x + 8.0 };
+            let tile_x = if selecting {
+                content_x + 40.0
+            } else {
+                content_x + 8.0
+            };
             let tile_r = [tile_x - 2.0, y + 2.0, 38.0, 42.0];
             let text_x = tile_x + 42.0;
             let btn_w = 34.0;
@@ -3704,7 +3714,7 @@ impl Launcher {
             let info_r = [exp_r[0] + btn_w, y + 3.0, btn_w, 40.0];
             let ren_r = [info_r[0] + btn_w, y + 3.0, btn_w, 40.0];
             let del_r = [ren_r[0] + btn_w, y + 3.0, btn_w, 40.0];
-            let open_x = if selecting { content_x } else { tile_r[0] + tile_r[2] };
+            let open_x = content_x;
             let open_r = [
                 open_x,
                 y,
@@ -3713,8 +3723,10 @@ impl Launcher {
             ];
 
             if selecting {
-                self.list_targets
-                    .push(([content_x, y, content_w, card_h], Action::FmToggleSelect(idx)));
+                self.list_targets.push((
+                    [content_x, y, content_w, card_h],
+                    Action::FmToggleSelect(idx),
+                ));
             } else {
                 self.list_targets.push((open_r, Action::FmOpenEntry(idx)));
                 self.list_targets
@@ -3845,7 +3857,12 @@ impl Launcher {
                     (exp_r, Icon::Share, Action::FmExportSingle(idx), my3_text()),
                     (info_r, Icon::Info, Action::FmOpenDetails(idx), my3_text()),
                     (ren_r, Icon::Pencil, Action::FmOpenRename(idx), my3_text()),
-                    (del_r, Icon::Trash, Action::FmRequestDeleteSingle(idx), danger),
+                    (
+                        del_r,
+                        Icon::Trash,
+                        Action::FmRequestDeleteSingle(idx),
+                        danger,
+                    ),
                 ] {
                     ui.icon(icon, r[0] + 7.0, r[1] + 11.0, 20.0, tint);
                     if let Some(c) = ui.clip_rect(r) {
@@ -3863,7 +3880,7 @@ impl Launcher {
     fn draw_fm_add_menu(&mut self, ui: &mut Ui, content_x: f32, content_w: f32, nav_y: f32) {
         self.list_targets.clear();
         self.targets
-            .push(([0.0, 0.0, 4000.0, 4000.0], Action::FmToggleAddMenu));
+            .push(([0.0, 0.0, 4000.0, 4000.0], Action::FmDismissMenu));
         let menu_w = 190.0;
         let item_h = 38.0;
         let items = [
@@ -3877,9 +3894,21 @@ impl Launcher {
         ui.rounded(mx, my, menu_w, menu_h, 12.0, my3_card_bg());
         ui.border(mx, my, menu_w, menu_h, 12.0, my3_border());
         for (i, (label, icon, action)) in items.into_iter().enumerate() {
-            let r = [mx + 6.0, my + 6.0 + i as f32 * item_h, menu_w - 12.0, item_h];
+            let r = [
+                mx + 6.0,
+                my + 6.0 + i as f32 * item_h,
+                menu_w - 12.0,
+                item_h,
+            ];
             ui.icon(icon, r[0] + 8.0, r[1] + 10.0, 18.0, my3_accent());
-            ui.text(Face::SemiBold, 13.0, r[0] + 36.0, r[1] + 11.0, my3_text(), label);
+            ui.text(
+                Face::SemiBold,
+                13.0,
+                r[0] + 36.0,
+                r[1] + 11.0,
+                my3_text(),
+                label,
+            );
             self.targets.push((r, action));
         }
     }
@@ -8131,6 +8160,9 @@ impl Launcher {
             }
             Some(Action::FmPaste) => {
                 self.catalog.fm_paste_here(&self.home);
+            }
+            Some(Action::FmDismissMenu) => {
+                self.catalog.fm_add_menu = false;
             }
             Some(Action::FmToggleAddMenu) => {
                 self.catalog.fm_add_menu = !self.catalog.fm_add_menu;
