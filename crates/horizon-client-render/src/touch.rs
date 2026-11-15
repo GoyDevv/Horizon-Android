@@ -741,6 +741,9 @@ impl TouchControls {
                         .fingers
                         .values()
                         .any(|(_, point)| layout::contains(p.rect(self.aspect()), *point));
+                if starling_button(self, b, a, control, [x, y, size, size], pressed, color) {
+                    continue;
+                }
                 let themed = match control {
                     Control::Chat => Some("chat"),
                     Control::Pause => Some("pause"),
@@ -752,9 +755,6 @@ impl TouchControls {
                 if themed.is_some_and(|name| {
                     theme_button(b, a, name, [x, y, size, size], pressed, color, false)
                 }) {
-                    continue;
-                }
-                if starling_button(self, b, a, control, [x, y, size, size], pressed, color) {
                     continue;
                 }
                 let name = match control {
@@ -1721,6 +1721,9 @@ pub fn draw_single_mcpe_control(
         return;
     }
     let bounds = [cx, cy, size, size];
+    if starling_button(tc, b, a, control, bounds, pressed, color) {
+        return;
+    }
     let themed = match control {
         Control::Chat => Some("chat"),
         Control::Pause => Some("pause"),
@@ -1730,9 +1733,6 @@ pub fn draw_single_mcpe_control(
         _ => None,
     };
     if themed.is_some_and(|name| theme_button(b, a, name, bounds, pressed, color, false)) {
-        return;
-    }
-    if starling_button(tc, b, a, control, bounds, pressed, color) {
         return;
     }
     let name = match control {

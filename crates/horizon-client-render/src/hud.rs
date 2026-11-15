@@ -305,7 +305,9 @@ fn builtin_touch_sprites(images: &[PackedImage]) -> Vec<PackedImage> {
             if images.iter().any(|(k, ..)| *k == key) {
                 return None;
             }
-            let (w, h, mut pixels) = decode_bytes(png).ok()?;
+            let (w, h, mut pixels) = decode_bytes(png)
+                .map_err(|e| log::warn!("touch sprite {name} failed to decode: {e}"))
+                .ok()?;
             if matches!(*name, "pause" | "inventory") {
                 for pixel in pixels.chunks_exact_mut(4) {
                     if pixel[0] >= 245 && pixel[1] >= 245 && pixel[2] >= 245 {
