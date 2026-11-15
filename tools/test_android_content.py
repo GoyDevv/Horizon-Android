@@ -32,6 +32,7 @@ zip = { version = "9", default-features = false, features = ["deflate"] }
     (root / 'src/lib.rs').write_text('''#![allow(dead_code)]
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 mod osk { pub enum Output { Text(String), Backspace, Enter, Close } }
+mod diagnostics { pub fn skip_next_promotion(_: &std::path::Path) {} }
 mod android_runtime {
     use std::sync::atomic::{AtomicBool, Ordering};
     static GPU_BATCHING: AtomicBool = AtomicBool::new(false);
