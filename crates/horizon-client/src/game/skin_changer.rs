@@ -369,7 +369,7 @@ impl Game<'_> {
             &lookup,
             240 | 240 << 8,
             self.res.mob_data(),
-            &self.player_armor_layers(),
+            &Vec::new(),
             &mut verts,
         );
         self.player_cape_geometry(&m, None, camera, 1.0, 240 | 240 << 8, &mut verts);

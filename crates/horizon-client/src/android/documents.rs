@@ -585,7 +585,11 @@ pub extern "system" fn document_result(
                     } else if let Some((src_path, suggested_name)) = pending.export_source_path {
                         let mut src_file = std::fs::File::open(&src_path)?;
                         let total = src_file.metadata().map(|m| m.len()).unwrap_or(0);
-                        content_files::copy_bounded(&mut src_file, &mut output, |copied| {
+                        content_files::copy_limited(
+                            &mut src_file,
+                            &mut output,
+                            content_files::MAX_WORLD_INPUT,
+                            |copied| {
                             let ratio = if total > 0 {
                                 (copied as f32 / total as f32).clamp(0.1, 0.98)
                             } else {
@@ -597,7 +601,8 @@ pub extern "system" fn document_result(
                                 Some(ratio),
                             );
                             !CANCEL.load(Ordering::Relaxed)
-                        })?;
+                            },
+                        )?;
                         output.sync_all()?;
                         notice(
                             format!("Saved '{suggested_name}' to chosen location."),
@@ -786,6 +791,10 @@ fn stage(request: Request, mut input: std::fs::File, name: String) -> Result<()>
         {
             return Err("Refusing a redirected import cache".into());
         }
+        let in_saves_target = target_dir
+            .file_name()
+            .and_then(|s| s.to_str())
+            .is_some_and(|s| s == "saves");
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
         let staged = request.cache.join(format!(".import-fm-{stamp}.part"));
         let res = (|| -> Result<()> {
@@ -793,7 +802,12 @@ fn stage(request: Request, mut input: std::fs::File, name: String) -> Result<()>
                 .write(true)
                 .create_new(true)
                 .open(&staged)?;
-            content_files::copy_bounded(&mut input, &mut output, |bytes| {
+            let limit = if in_saves_target {
+                content_files::MAX_WORLD_INPUT
+            } else {
+                content_files::MAX_INPUT
+            };
+            content_files::copy_limited(&mut input, &mut output, limit, |bytes| {
                 let ratio = if total_file_bytes > 0 {
                     (bytes as f32 / total_file_bytes as f32).clamp(0.08, 0.85)
                 } else {

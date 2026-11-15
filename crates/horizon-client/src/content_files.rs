@@ -39,6 +39,7 @@ impl Kind {
     }
 }
 pub const MAX_INPUT: u64 = 256 << 20;
+pub const MAX_WORLD_INPUT: u64 = 4 << 30;
 const MAX_EXPANDED: u64 = 512 << 20;
 pub fn plain_name(name: &str) -> bool {
     !name.is_empty()
@@ -258,6 +259,14 @@ pub fn read_mod_archive_id(path: &Path, original_name: &str) -> crate::Result<(S
 pub fn copy_bounded(
     input: &mut impl Read,
     output: &mut impl io::Write,
+    progress: impl FnMut(u64) -> bool,
+) -> io::Result<u64> {
+    copy_limited(input, output, MAX_INPUT, progress)
+}
+pub fn copy_limited(
+    input: &mut impl Read,
+    output: &mut impl io::Write,
+    limit: u64,
     mut progress: impl FnMut(u64) -> bool,
 ) -> io::Result<u64> {
     let mut total = 0u64;
@@ -274,8 +283,11 @@ pub fn copy_bounded(
             break;
         }
         total += n as u64;
-        if total > MAX_INPUT {
-            return Err(io::Error::other("Import exceeds 256 MiB"));
+        if total > limit {
+            return Err(io::Error::other(format!(
+                "Import exceeds {} MiB",
+                limit >> 20
+            )));
         }
         output.write_all(&buffer[..n])?;
     }
@@ -369,6 +381,16 @@ mod tests {
         );
         assert_eq!(out, b"test");
         assert!(copy_bounded(&mut io::repeat(0), &mut io::sink(), |_| true).is_err());
+        assert_eq!(
+            copy_limited(&mut Cursor::new(vec![7u8; 100]), &mut io::sink(), 100, |_| true).unwrap(),
+            100
+        );
+        assert!(
+            copy_limited(&mut Cursor::new(vec![7u8; 101]), &mut io::sink(), 100, |_| true)
+                .unwrap_err()
+                .to_string()
+                .contains("exceeds")
+        );
         assert!(copy_bounded(&mut Cursor::new(b"test"), &mut io::sink(), |_| false).is_err());
     }
 }

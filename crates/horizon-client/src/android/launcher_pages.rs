@@ -453,6 +453,7 @@ pub(super) enum Action {
     FmImportHere,
     FmImportFolderHere,
     FmOpenNewFolder,
+    FmToggleAddMenu,
     FmSubmitNewFolder,
     FmOpenRename(usize),
     FmOpenRenameSelected,
@@ -468,6 +469,22 @@ pub(super) enum Action {
     CloseUpdateScreen,
     TriggerUpdateInstall,
     CheckForUpdates,
+}
+
+fn fm_icon_button(
+    ui: &mut Ui,
+    targets: &mut Vec<([f32; 4], Action)>,
+    rect: [f32; 4],
+    icon: Icon,
+    action: Action,
+    tint: u32,
+    enabled: bool,
+) {
+    let [x, y, w, h] = rect;
+    ui.icon(icon, x + (w - 18.0) * 0.5, y + (h - 18.0) * 0.5, 18.0, tint);
+    if enabled && let Some(c) = ui.clip_rect(rect) {
+        targets.push((c, action));
+    }
 }
 
 pub(super) fn button(
@@ -3006,7 +3023,7 @@ impl Launcher {
             if self.catalog.installed_sub_tab == InstalledSubTab::Library {
                 "Content Library"
             } else {
-                "Profile File Manager"
+                "Files"
             },
         );
 
@@ -3391,133 +3408,212 @@ impl Launcher {
         }
 
         // ---- Sub-View 2: Integrated Mini File Manager (`InstalledSubTab::FileManager`) ----
-        // Row 1: Back, Forward, Up + Clickable Breadcrumb Trail + Import & New Folder CTAs
         let nav_y = 94.0 + slide_y;
-        let nav_btn_w = 32.0;
-        let has_back = !self.catalog.fm_back_stack.is_empty();
-        let has_fwd = !self.catalog.fm_forward_stack.is_empty();
-        let has_up = !self.catalog.fm_current_dir.is_empty();
-        button(
-            ui,
-            &mut self.targets,
-            [content_x, nav_y, nav_btn_w, 30.0],
-            "←",
-            Action::FmBack,
-            has_back,
-        );
-        button(
-            ui,
-            &mut self.targets,
-            [content_x + 36.0, nav_y, nav_btn_w, 30.0],
-            "→",
-            Action::FmForward,
-            has_fwd,
-        );
-        button(
-            ui,
-            &mut self.targets,
-            [content_x + 72.0, nav_y, nav_btn_w, 30.0],
-            "↑",
-            Action::FmUp,
-            has_up,
-        );
-
-        let right_cta_w = if compact { 256.0 } else { 296.0 };
-        let imp_btn_w = (right_cta_w - 8.0) * 0.26;
-        let imp_fld_w = (right_cta_w - 8.0) * 0.46;
-        let new_folder_w = right_cta_w - 8.0 - imp_btn_w - imp_fld_w;
-        let btn1_x = content_x + content_w - right_cta_w;
-        let btn2_x = btn1_x + imp_btn_w + 4.0;
-        let btn3_x = btn2_x + imp_fld_w + 4.0;
-        button(
-            ui,
-            &mut self.targets,
-            [btn1_x, nav_y, imp_btn_w, 30.0],
-            "Import",
-            Action::FmImportHere,
-            false,
-        );
-        button(
-            ui,
-            &mut self.targets,
-            [btn2_x, nav_y, imp_fld_w, 30.0],
-            "Import Folder",
-            Action::FmImportFolderHere,
-            true,
-        );
-        button(
-            ui,
-            &mut self.targets,
-            [btn3_x, nav_y, new_folder_w, 30.0],
-            "+ Folder",
-            Action::FmOpenNewFolder,
-            false,
-        );
-
-        // Clickable Breadcrumb Bar between Up button and Right CTAs
-        let bc_x = content_x + 110.0;
-        let bc_w = (content_x + content_w - right_cta_w - 8.0 - bc_x).max(60.0);
-        ui.rounded(bc_x, nav_y, bc_w, 30.0, 10.0, my3_surface());
-        ui.border(bc_x, nav_y, bc_w, 30.0, 10.0, my3_border());
-        let mut cur_bx = bc_x + 6.0;
-        let root_lbl = format!("P{}", self.catalog.config.profile + 1);
-        let root_bw = (ui.measure(Face::SemiBold, 11.5, &root_lbl) + 12.0).min(bc_w - 10.0);
-        let root_br = [cur_bx, nav_y + 4.0, root_bw, 22.0];
-        ui.rounded(
-            root_br[0],
-            root_br[1],
-            root_br[2],
-            root_br[3],
-            6.0,
-            if self.catalog.fm_current_dir.is_empty() {
-                my3_accent_soft()
-            } else {
-                my3_surface_high()
-            },
-        );
-        ui.centered_fit(Face::SemiBold, 11.0, root_br, my3_accent(), &root_lbl);
-        self.targets.push((root_br, Action::FmBreadcrumb(0)));
-        cur_bx += root_bw + 4.0;
-
-        if !self.catalog.fm_current_dir.is_empty() {
-            let parts: Vec<&str> = self
-                .catalog
-                .fm_current_dir
-                .split('/')
-                .filter(|s| !s.is_empty())
-                .collect();
-            for (idx, seg) in parts.iter().enumerate() {
-                if cur_bx + 28.0 > bc_x + bc_w {
-                    break;
+        let sel_count = self.catalog.fm_selected.len();
+        let selecting = sel_count > 0;
+        let clip_count = self
+            .catalog
+            .fm_clipboard
+            .as_ref()
+            .map_or(0, |(v, _)| v.len());
+        let danger = horizon_client::ui_theme::active_theme().danger;
+        if selecting {
+            let bar_h = 34.0;
+            ui.rounded(content_x, nav_y - 2.0, content_w, bar_h, 10.0, my3_nav_active());
+            ui.border(content_x, nav_y - 2.0, content_w, bar_h, 10.0, my3_accent());
+            fm_icon_button(
+                ui,
+                &mut self.targets,
+                [content_x + 2.0, nav_y - 2.0, 34.0, bar_h],
+                Icon::Close,
+                Action::FmClearSelection,
+                my3_text(),
+                true,
+            );
+            ui.text(
+                Face::SemiBold,
+                13.0,
+                content_x + 42.0,
+                nav_y + 6.0,
+                my3_text(),
+                &format!("{sel_count} selected"),
+            );
+            let mut tools: Vec<(Icon, Action, u32, bool)> = vec![
+                (Icon::SelectAll, Action::FmSelectAll, my3_text(), true),
+                (Icon::Copy, Action::FmCopy, my3_text(), true),
+                (Icon::Scissors, Action::FmCut, my3_text(), true),
+                (Icon::Share, Action::FmExportSelected, my3_text(), true),
+                (
+                    Icon::Pencil,
+                    Action::FmOpenRenameSelected,
+                    my3_text(),
+                    sel_count == 1,
+                ),
+                (
+                    Icon::Trash,
+                    Action::FmRequestDeleteSelected,
+                    danger,
+                    true,
+                ),
+            ];
+            if clip_count > 0 {
+                tools.insert(3, (Icon::Clipboard, Action::FmPaste, my3_accent(), true));
+            }
+            let tool_w = 36.0;
+            let mut tx = content_x + content_w - 4.0 - tool_w * tools.len() as f32;
+            for (icon, action, tint, enabled) in tools {
+                fm_icon_button(
+                    ui,
+                    &mut self.targets,
+                    [tx, nav_y - 2.0, tool_w, bar_h],
+                    icon,
+                    action,
+                    if enabled { tint } else { my3_muted() },
+                    enabled,
+                );
+                tx += tool_w;
+            }
+        } else {
+            let has_back = !self.catalog.fm_back_stack.is_empty();
+            let has_fwd = !self.catalog.fm_forward_stack.is_empty();
+            let has_up = !self.catalog.fm_current_dir.is_empty();
+            for (i, (icon, action, enabled)) in [
+                (Icon::ArrowLeft, Action::FmBack, has_back),
+                (Icon::ArrowRight, Action::FmForward, has_fwd),
+                (Icon::ArrowUp, Action::FmUp, has_up),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let r = [content_x + i as f32 * 36.0, nav_y, 32.0, 30.0];
+                ui.rounded(r[0], r[1], r[2], r[3], 8.0, my3_surface_high());
+                ui.border(r[0], r[1], r[2], r[3], 8.0, my3_border());
+                ui.icon(
+                    icon,
+                    r[0] + 7.0,
+                    r[1] + 6.0,
+                    18.0,
+                    if enabled { my3_text() } else { my3_muted() },
+                );
+                if enabled && let Some(c) = ui.clip_rect(r) {
+                    self.targets.push((c, action));
                 }
-                ui.text(Face::Regular, 11.0, cur_bx, nav_y + 7.0, my3_muted(), "/");
-                cur_bx += 8.0;
-                let avail = (bc_x + bc_w - 6.0 - cur_bx).max(24.0);
-                let fit_seg = ui.fit_text(Face::Medium, 11.0, seg, (avail - 10.0).max(16.0));
-                let seg_w = (ui.measure(Face::Medium, 11.0, &fit_seg) + 10.0).min(avail);
-                let seg_r = [cur_bx, nav_y + 4.0, seg_w, 22.0];
-                let is_last = idx + 1 == parts.len();
-                ui.rounded(
-                    seg_r[0],
-                    seg_r[1],
-                    seg_r[2],
-                    seg_r[3],
-                    6.0,
-                    if is_last {
-                        my3_accent_soft()
-                    } else {
-                        my3_surface_high()
-                    },
+            }
+        }
+
+        let add_w = 74.0;
+        let paste_w = 92.0;
+        let right_cta_w = if selecting {
+            0.0
+        } else if clip_count > 0 {
+            add_w + paste_w + 8.0
+        } else {
+            add_w
+        };
+        let add_x = content_x + content_w - add_w;
+        let add_rect = [add_x, nav_y, add_w, 30.0];
+        if !selecting {
+            ui.rounded(
+                add_rect[0],
+                add_rect[1],
+                add_rect[2],
+                add_rect[3],
+                8.0,
+                my3_accent(),
+            );
+            ui.icon(
+                Icon::Plus,
+                add_rect[0] + 11.0,
+                add_rect[1] + 6.0,
+                18.0,
+                my3_on_accent(),
+            );
+            ui.text(
+                Face::SemiBold,
+                13.0,
+                add_rect[0] + 34.0,
+                add_rect[1] + 7.0,
+                my3_on_accent(),
+                "Add",
+            );
+            self.targets.push((add_rect, Action::FmToggleAddMenu));
+            if clip_count > 0 {
+                button(
+                    ui,
+                    &mut self.targets,
+                    [add_x - 8.0 - paste_w, nav_y, paste_w, 30.0],
+                    &format!("Paste ({clip_count})"),
+                    Action::FmPaste,
+                    false,
                 );
-                ui.centered_fit(
-                    Face::Medium,
-                    11.0,
-                    seg_r,
-                    if is_last { my3_text() } else { my3_muted() },
-                    &fit_seg,
-                );
-                self.targets.push((seg_r, Action::FmBreadcrumb(idx + 1)));
-                cur_bx += seg_w + 4.0;
+            }
+        }
+
+        if !selecting {
+            let bc_x = content_x + 110.0;
+            let bc_w = (content_x + content_w - right_cta_w - 8.0 - bc_x).max(60.0);
+            ui.rounded(bc_x, nav_y, bc_w, 30.0, 10.0, my3_surface());
+            ui.border(bc_x, nav_y, bc_w, 30.0, 10.0, my3_border());
+            let mut cur_bx = bc_x + 6.0;
+            let root_lbl = format!("P{}", self.catalog.config.profile + 1);
+            let root_bw = (ui.measure(Face::SemiBold, 11.5, &root_lbl) + 12.0).min(bc_w - 10.0);
+            let root_br = [cur_bx, nav_y + 4.0, root_bw, 22.0];
+            ui.rounded(
+                root_br[0],
+                root_br[1],
+                root_br[2],
+                root_br[3],
+                6.0,
+                if self.catalog.fm_current_dir.is_empty() {
+                    my3_accent_soft()
+                } else {
+                    my3_surface_high()
+                },
+            );
+            ui.centered_fit(Face::SemiBold, 11.0, root_br, my3_accent(), &root_lbl);
+            self.targets.push((root_br, Action::FmBreadcrumb(0)));
+            cur_bx += root_bw + 4.0;
+
+            if !self.catalog.fm_current_dir.is_empty() {
+                let parts: Vec<&str> = self
+                    .catalog
+                    .fm_current_dir
+                    .split('/')
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                for (idx, seg) in parts.iter().enumerate() {
+                    if cur_bx + 28.0 > bc_x + bc_w {
+                        break;
+                    }
+                    ui.text(Face::Regular, 11.0, cur_bx, nav_y + 7.0, my3_muted(), "/");
+                    cur_bx += 8.0;
+                    let avail = (bc_x + bc_w - 6.0 - cur_bx).max(24.0);
+                    let fit_seg = ui.fit_text(Face::Medium, 11.0, seg, (avail - 10.0).max(16.0));
+                    let seg_w = (ui.measure(Face::Medium, 11.0, &fit_seg) + 10.0).min(avail);
+                    let seg_r = [cur_bx, nav_y + 4.0, seg_w, 22.0];
+                    let is_last = idx + 1 == parts.len();
+                    ui.rounded(
+                        seg_r[0],
+                        seg_r[1],
+                        seg_r[2],
+                        seg_r[3],
+                        6.0,
+                        if is_last {
+                            my3_accent_soft()
+                        } else {
+                            my3_surface_high()
+                        },
+                    );
+                    ui.centered_fit(
+                        Face::Medium,
+                        11.0,
+                        seg_r,
+                        if is_last { my3_text() } else { my3_muted() },
+                        &fit_seg,
+                    );
+                    self.targets.push((seg_r, Action::FmBreadcrumb(idx + 1)));
+                    cur_bx += seg_w + 4.0;
+                }
             }
         }
 
@@ -3546,54 +3642,8 @@ impl Launcher {
             );
         }
 
-        // Row 3: Multi-Select & Clipboard Action Toolbar
-        let tool_y = 158.0 + slide_y;
-        let sel_count = self.catalog.fm_selected.len();
-        let clip_count = self
-            .catalog
-            .fm_clipboard
-            .as_ref()
-            .map_or(0, |(v, _)| v.len());
-        let paste_label = if clip_count > 0 {
-            format!("Paste ({clip_count})")
-        } else {
-            "Paste".into()
-        };
-        let del_label = if sel_count > 0 {
-            format!("Delete ({sel_count})")
-        } else {
-            "Delete".into()
-        };
-        let has_dir_sel = self.catalog.fm_selected.iter().any(|rel| {
-            self.catalog
-                .fm_entries
-                .iter()
-                .any(|e| e.is_dir && &e.rel_path == rel)
-        });
-        let export_lbl = if has_dir_sel {
-            "Export Folder".to_string()
-        } else {
-            "Export".to_string()
-        };
-        let tools: [(&str, Action, bool); 8] = [
-            ("All", Action::FmSelectAll, false),
-            ("Clear", Action::FmClearSelection, false),
-            ("Copy", Action::FmCopy, sel_count > 0),
-            ("Cut", Action::FmCut, sel_count > 0),
-            (&paste_label, Action::FmPaste, clip_count > 0),
-            ("Rename", Action::FmOpenRenameSelected, sel_count == 1),
-            (&export_lbl, Action::FmExportSelected, sel_count > 0),
-            (&del_label, Action::FmRequestDeleteSelected, sel_count > 0),
-        ];
-        let t_gap = 4.0;
-        let t_w = ((content_w - t_gap * (tools.len() as f32 - 1.0)) / tools.len() as f32).max(38.0);
-        for (i, (lbl, act, hi)) in tools.into_iter().enumerate() {
-            let tx = content_x + i as f32 * (t_w + t_gap);
-            button(ui, &mut self.targets, [tx, tool_y, t_w, 26.0], lbl, act, hi);
-        }
-
         // Scrollable File & Directory Rows
-        let top = 190.0 + slide_y;
+        let top = 166.0 + slide_y;
         let bottom = h - 42.0;
         if self.catalog.fm_entries.is_empty() {
             self.list_view = None;
@@ -3619,9 +3669,12 @@ impl Launcher {
                 content_x + 54.0,
                 top + 40.0,
                 (content_w - 72.0).max(80.0),
-                "Use Import to copy files from Android storage, + Folder to create a directory, or Paste from clipboard.",
+                "Tap Add to import files or a folder from Android storage, or to create a new folder.",
                 my3_muted(),
             );
+            if self.catalog.fm_add_menu {
+                self.draw_fm_add_menu(ui, content_x, content_w, nav_y);
+            }
             return;
         }
 
@@ -3642,28 +3695,36 @@ impl Launcher {
             let y = top + idx as f32 * row_h - self.catalog.scroll;
             let card_h = 46.0;
             let selected = self.catalog.fm_selected.contains(&entry.rel_path);
-            let check_r = [content_x + 6.0, y + 7.0, 32.0, 32.0];
-            let actions_w = if compact { 256.0 } else { 304.0 };
+            let tile_x = if selecting { content_x + 40.0 } else { content_x + 8.0 };
+            let tile_r = [tile_x - 2.0, y + 2.0, 38.0, 42.0];
+            let text_x = tile_x + 42.0;
+            let btn_w = 34.0;
+            let actions_w = if selecting { 0.0 } else { btn_w * 4.0 + 8.0 };
+            let exp_r = [content_x + content_w - actions_w, y + 3.0, btn_w, 40.0];
+            let info_r = [exp_r[0] + btn_w, y + 3.0, btn_w, 40.0];
+            let ren_r = [info_r[0] + btn_w, y + 3.0, btn_w, 40.0];
+            let del_r = [ren_r[0] + btn_w, y + 3.0, btn_w, 40.0];
+            let open_x = if selecting { content_x } else { tile_r[0] + tile_r[2] };
             let open_r = [
-                content_x + 40.0,
+                open_x,
                 y,
-                (content_w - 44.0 - actions_w).max(60.0),
+                (content_x + content_w - actions_w - open_x).max(60.0),
                 card_h,
             ];
-            let btn_w = (actions_w - 12.0) / 4.0;
-            let exp_r = [content_x + content_w - actions_w, y + 8.0, btn_w, 30.0];
-            let info_r = [exp_r[0] + btn_w + 4.0, y + 8.0, btn_w, 30.0];
-            let ren_r = [info_r[0] + btn_w + 4.0, y + 8.0, btn_w, 30.0];
-            let del_r = [ren_r[0] + btn_w + 4.0, y + 8.0, btn_w, 30.0];
 
-            self.list_targets.push((open_r, Action::FmOpenEntry(idx)));
-            self.list_targets
-                .push((check_r, Action::FmToggleSelect(idx)));
-            self.list_targets.push((exp_r, Action::FmExportSingle(idx)));
-            self.list_targets.push((info_r, Action::FmOpenDetails(idx)));
-            self.list_targets.push((ren_r, Action::FmOpenRename(idx)));
-            self.list_targets
-                .push((del_r, Action::FmRequestDeleteSingle(idx)));
+            if selecting {
+                self.list_targets
+                    .push(([content_x, y, content_w, card_h], Action::FmToggleSelect(idx)));
+            } else {
+                self.list_targets.push((open_r, Action::FmOpenEntry(idx)));
+                self.list_targets
+                    .push((tile_r, Action::FmToggleSelect(idx)));
+                self.list_targets.push((exp_r, Action::FmExportSingle(idx)));
+                self.list_targets.push((info_r, Action::FmOpenDetails(idx)));
+                self.list_targets.push((ren_r, Action::FmOpenRename(idx)));
+                self.list_targets
+                    .push((del_r, Action::FmRequestDeleteSingle(idx)));
+            }
 
             if y + card_h < top || y > bottom {
                 continue;
@@ -3693,9 +3754,8 @@ impl Launcher {
                 },
             );
 
-            ui.m3_checkbox(content_x + 11.0, y + 13.0, 20.0, selected, "");
-            if let Some(c) = ui.clip_rect(check_r) {
-                self.targets.push((c, Action::FmToggleSelect(idx)));
+            if selecting {
+                ui.m3_checkbox(content_x + 11.0, y + 13.0, 20.0, selected, "");
             }
 
             let entry_icon = if entry.is_dir {
@@ -3714,7 +3774,7 @@ impl Launcher {
                 Icon::FileText
             };
             ui.rounded(
-                content_x + 38.0,
+                tile_x,
                 y + 7.0,
                 32.0,
                 32.0,
@@ -3727,7 +3787,7 @@ impl Launcher {
             );
             ui.icon(
                 entry_icon,
-                content_x + 46.0,
+                tile_x + 8.0,
                 y + 15.0,
                 16.0,
                 if entry.is_dir {
@@ -3737,19 +3797,22 @@ impl Launcher {
                 },
             );
 
-            let tx = content_x + 78.0;
-            let max_tw = (content_w - 86.0 - actions_w).max(50.0);
+            let max_tw = (content_x + content_w - actions_w - text_x - 6.0).max(50.0);
             ui.text_clipped(
                 Face::SemiBold,
                 13.5,
-                tx,
+                text_x,
                 y + 5.0,
                 max_tw,
                 my3_text(),
                 &entry.name,
             );
             let meta_line = if entry.is_dir {
-                format!("Folder  •  {} item(s)  •  Tap to open", entry.size_bytes)
+                if entry.size_bytes == 0 {
+                    "Folder  •  empty".to_string()
+                } else {
+                    format!("Folder  •  {} item(s)", entry.size_bytes)
+                }
             } else {
                 format!(
                     "{}  •  {}  •  {}",
@@ -3761,50 +3824,64 @@ impl Launcher {
             ui.text_clipped(
                 Face::Regular,
                 10.5,
-                tx,
+                text_x,
                 y + 24.0,
                 max_tw,
                 my3_muted(),
                 &meta_line,
             );
-            if let Some(c) = ui.clip_rect(open_r) {
-                self.targets.push((c, Action::FmOpenEntry(idx)));
+            if selecting {
+                if let Some(c) = ui.clip_rect([content_x, y, content_w, card_h]) {
+                    self.targets.push((c, Action::FmToggleSelect(idx)));
+                }
+            } else {
+                if let Some(c) = ui.clip_rect(open_r) {
+                    self.targets.push((c, Action::FmOpenEntry(idx)));
+                }
+                if let Some(c) = ui.clip_rect(tile_r) {
+                    self.targets.push((c, Action::FmToggleSelect(idx)));
+                }
+                for (r, icon, action, tint) in [
+                    (exp_r, Icon::Share, Action::FmExportSingle(idx), my3_text()),
+                    (info_r, Icon::Info, Action::FmOpenDetails(idx), my3_text()),
+                    (ren_r, Icon::Pencil, Action::FmOpenRename(idx), my3_text()),
+                    (del_r, Icon::Trash, Action::FmRequestDeleteSingle(idx), danger),
+                ] {
+                    ui.icon(icon, r[0] + 7.0, r[1] + 11.0, 20.0, tint);
+                    if let Some(c) = ui.clip_rect(r) {
+                        self.targets.push((c, action));
+                    }
+                }
             }
-
-            button(
-                ui,
-                &mut self.targets,
-                exp_r,
-                "Export",
-                Action::FmExportSingle(idx),
-                false,
-            );
-            button(
-                ui,
-                &mut self.targets,
-                info_r,
-                "Details",
-                Action::FmOpenDetails(idx),
-                false,
-            );
-            button(
-                ui,
-                &mut self.targets,
-                ren_r,
-                "Rename",
-                Action::FmOpenRename(idx),
-                false,
-            );
-            button(
-                ui,
-                &mut self.targets,
-                del_r,
-                "Delete",
-                Action::FmRequestDeleteSingle(idx),
-                false,
-            );
         }
         ui.set_clip(None);
+        if self.catalog.fm_add_menu {
+            self.draw_fm_add_menu(ui, content_x, content_w, nav_y);
+        }
+    }
+
+    fn draw_fm_add_menu(&mut self, ui: &mut Ui, content_x: f32, content_w: f32, nav_y: f32) {
+        self.list_targets.clear();
+        self.targets
+            .push(([0.0, 0.0, 4000.0, 4000.0], Action::FmToggleAddMenu));
+        let menu_w = 190.0;
+        let item_h = 38.0;
+        let items = [
+            ("Import files", Icon::FileText, Action::FmImportHere),
+            ("Import folder", Icon::Folder, Action::FmImportFolderHere),
+            ("New folder", Icon::Plus, Action::FmOpenNewFolder),
+        ];
+        let menu_h = item_h * items.len() as f32 + 12.0;
+        let mx = content_x + content_w - menu_w;
+        let my = nav_y + 34.0;
+        ui.rounded(mx, my, menu_w, menu_h, 12.0, my3_card_bg());
+        ui.border(mx, my, menu_w, menu_h, 12.0, my3_border());
+        for (i, (label, icon, action)) in items.into_iter().enumerate() {
+            let r = [mx + 6.0, my + 6.0 + i as f32 * item_h, menu_w - 12.0, item_h];
+            ui.icon(icon, r[0] + 8.0, r[1] + 10.0, 18.0, my3_accent());
+            ui.text(Face::SemiBold, 13.0, r[0] + 36.0, r[1] + 11.0, my3_text(), label);
+            self.targets.push((r, action));
+        }
     }
 
     /// Modal dialogs for the Integrated Mini File Manager:
@@ -8046,14 +8123,20 @@ impl Launcher {
             }
             Some(Action::FmCopy) => {
                 self.catalog.fm_copy_or_cut(&self.home, false);
+                self.catalog.fm_selected.clear();
             }
             Some(Action::FmCut) => {
                 self.catalog.fm_copy_or_cut(&self.home, true);
+                self.catalog.fm_selected.clear();
             }
             Some(Action::FmPaste) => {
                 self.catalog.fm_paste_here(&self.home);
             }
+            Some(Action::FmToggleAddMenu) => {
+                self.catalog.fm_add_menu = !self.catalog.fm_add_menu;
+            }
             Some(Action::FmImportHere) => {
+                self.catalog.fm_add_menu = false;
                 let game_home = self.catalog.config.game_home(&self.home);
                 match crate::document_store::resolve_fm_path(
                     &self.home,
@@ -8069,6 +8152,7 @@ impl Launcher {
                 }
             }
             Some(Action::FmImportFolderHere) => {
+                self.catalog.fm_add_menu = false;
                 let game_home = self.catalog.config.game_home(&self.home);
                 match crate::document_store::resolve_fm_path(
                     &self.home,
@@ -8084,6 +8168,7 @@ impl Launcher {
                 }
             }
             Some(Action::FmOpenNewFolder) => {
+                self.catalog.fm_add_menu = false;
                 self.catalog.fm_input_text = "New Folder".into();
                 self.catalog.fm_modal = Some(crate::catalog::FmModal::NewFolder);
                 self.catalog.editing = Some("fm_new_folder");

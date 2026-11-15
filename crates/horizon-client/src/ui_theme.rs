@@ -151,6 +151,11 @@ pub enum Icon {
     Trash,
     Share,
     Skins,
+    ArrowUp,
+    Info,
+    Scissors,
+    Clipboard,
+    SelectAll,
 }
 
 struct Fonts {
@@ -738,6 +743,45 @@ fn icon_hit(icon: Icon, u: f32, v: f32) -> bool {
                 && (v - 0.22) >= (u - 0.72) * 0.55;
             let neck_cut = ((u - 0.50).powi(2) + (v - 0.20).powi(2)).sqrt() <= 0.12;
             (body || left_sleeve || right_sleeve) && !neck_cut
+        }
+        Icon::ArrowUp => {
+            let stem = seg_dist(u, v, 0.50, 0.78, 0.50, 0.24) <= 0.055;
+            let left = seg_dist(u, v, 0.50, 0.24, 0.28, 0.46) <= 0.055;
+            let right = seg_dist(u, v, 0.50, 0.24, 0.72, 0.46) <= 0.055;
+            stem || left || right
+        }
+        Icon::Info => {
+            let (dx, dy) = (u - 0.50, v - 0.50);
+            let ring = (0.31..=0.38).contains(&(dx * dx + dy * dy).sqrt());
+            let dot = ((u - 0.50).powi(2) + (v - 0.34).powi(2)).sqrt() <= 0.045;
+            let stem = seg_dist(u, v, 0.50, 0.46, 0.50, 0.68) <= 0.045;
+            ring || dot || stem
+        }
+        Icon::Scissors => {
+            let blade_a = seg_dist(u, v, 0.40, 0.40, 0.80, 0.78) <= 0.045;
+            let blade_b = seg_dist(u, v, 0.40, 0.60, 0.80, 0.22) <= 0.045;
+            let ring_a = {
+                let d = ((u - 0.28).powi(2) + (v - 0.28).powi(2)).sqrt();
+                (0.06..=0.12).contains(&d)
+            };
+            let ring_b = {
+                let d = ((u - 0.28).powi(2) + (v - 0.72).powi(2)).sqrt();
+                (0.06..=0.12).contains(&d)
+            };
+            blade_a || blade_b || ring_a || ring_b
+        }
+        Icon::Clipboard => {
+            let outer = (0.24..=0.76).contains(&u) && (0.22..=0.84).contains(&v);
+            let inner = (0.31..=0.69).contains(&u) && (0.29..=0.77).contains(&v);
+            let clip = (0.38..=0.62).contains(&u) && (0.14..=0.30).contains(&v);
+            (outer && !inner) || clip
+        }
+        Icon::SelectAll => {
+            let outer = (0.22..=0.78).contains(&u) && (0.22..=0.78).contains(&v);
+            let inner = (0.29..=0.71).contains(&u) && (0.29..=0.71).contains(&v);
+            let tick_a = seg_dist(u, v, 0.37, 0.51, 0.46, 0.60) <= 0.045;
+            let tick_b = seg_dist(u, v, 0.46, 0.60, 0.64, 0.40) <= 0.045;
+            (outer && !inner) || tick_a || tick_b
         }
     }
 }

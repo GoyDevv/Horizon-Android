@@ -834,7 +834,8 @@ class LauncherOverhaulTests(unittest.TestCase):
         # 2. UI layout fit & button text auto-step-down
         self.assertIn("let wb_h = 114.0;", launcher_pages)
         self.assertIn("let studio_offset = 196.0;", launcher_pages)
-        self.assertIn("let right_cta_w = if compact { 256.0 } else { 296.0 };", launcher_pages)
+        self.assertIn("Action::FmToggleAddMenu", launcher_pages)
+        self.assertIn("MAX_WORLD_INPUT", documents)
 
         # 3. StagingBelt crash guard & ProcessExitGuard
         self.assertNotIn('.expect("staging belt slices are mapped")', upload)
