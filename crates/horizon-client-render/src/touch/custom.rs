@@ -167,6 +167,18 @@ impl CustomButton {
         }
         out
     }
+    /// The bound keys joined with `+` (ignores the custom label).
+    pub fn key_label(&self) -> String {
+        let tokens = self.active_tokens();
+        if tokens.is_empty() {
+            return "Button".into();
+        }
+        tokens
+            .iter()
+            .map(|t| friendly_token_name(t))
+            .collect::<Vec<_>>()
+            .join("+")
+    }
     pub fn label(&self) -> String {
         if !self.custom_label.trim().is_empty() {
             return self.custom_label.trim().to_owned();

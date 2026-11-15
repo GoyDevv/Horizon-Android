@@ -1194,15 +1194,13 @@ fn draw_input_picker_modal(
             ui.border(dx, dy, dw, dh, 18.0, accent);
             let title_str = if for_custom_send {
                 "Send Custom Input — Choose Input Type".to_owned()
-            } else if mcpe_exclusive {
-                "MCPE Custom Button — Choose Exclusive Binding".to_owned()
             } else {
                 format!("Assign Event Slot #{} — Choose Input Type", event_slot + 1)
             };
             let sub_str = if for_custom_send {
                 "Tap any physical key, use System Keyboard, or pick from the PC layout below."
             } else if mcpe_exclusive {
-                "Exclusive binding: Keyboard OR Mouse (selecting one clears the other)."
+                "Each MCPE button can trigger up to 2 keys or mouse events together."
             } else {
                 "Each GoyControl button can trigger up to 3 Keyboard or Mouse events simultaneously."
             };
@@ -1223,7 +1221,7 @@ fn draw_input_picker_modal(
                     r_kb,
                     "Keyboard Key",
                     if mcpe_exclusive {
-                        "Bind 1 key (clears mouse binding)"
+                        "Bind a key to this slot (the other slot is kept)"
                     } else {
                         "Full 104-Key horizontal PC keyboard"
                     },
@@ -1232,7 +1230,7 @@ fn draw_input_picker_modal(
                     r_ms,
                     "Mouse & Actions",
                     if mcpe_exclusive {
-                        "Bind 1 mouse/action (clears key)"
+                        "Bind a mouse/action to this slot (the other slot is kept)"
                     } else {
                         "LMB, RMB, MMB, Scroll, Look & Actions"
                     },
@@ -1297,8 +1295,6 @@ fn draw_input_picker_modal(
             ui.border(dx, dy, dw, dh, 18.0, accent);
             let title_str = if for_custom_send {
                 "Send Custom Input — Full PC Keyboard (Tap or Swipe)".to_owned()
-            } else if mcpe_exclusive {
-                "MCPE Exclusive Keyboard Binding (Clears Mouse)".to_owned()
             } else {
                 format!(
                     "Event Slot #{} — Full PC Keyboard (Tap or Swipe)",
@@ -1373,8 +1369,6 @@ fn draw_input_picker_modal(
             ui.border(dx, dy, dw, dh, 18.0, accent);
             let title_str = if for_custom_send {
                 "Send Custom Input — Mouse Buttons, Wheel & Actions".to_owned()
-            } else if mcpe_exclusive {
-                "MCPE Exclusive Mouse/Action Binding (Clears Keyboard Binding)".to_owned()
             } else {
                 format!(
                     "Event Slot #{} — Mouse Buttons, Wheel, Look & Actions",
@@ -5136,7 +5130,7 @@ pub fn draw_hud_editor(
             if is_mcpe_mode {
                 (
                     format!("MCPE Custom Button — {lbl}"),
-                    "Exclusive Binding (Keyboard OR Mouse) • Icon, style & geometry",
+                    "Up to 2 keys or mouse events • Icon, style & geometry",
                 )
             } else {
                 (
@@ -6172,73 +6166,15 @@ pub fn draw_hud_editor(
                 }
                 _ => {
                     // Button Tab 2: Events, Behavior Toggles & Visibility Checkboxes
-                    if is_mcpe_mode && ed.selected_custom.is_some() {
-                        let cur_tok = ed
-                            .selected_custom
-                            .and_then(|idx| tc.settings.custom_buttons.get(idx))
-                            .map(|b| b.key.as_str())
-                            .unwrap_or("");
-                        let is_kb = CustomButton::is_keyboard_binding(cur_tok);
-                        let is_ms = CustomButton::is_mouse_binding(cur_tok);
-                        let kb_lbl = if is_kb {
-                            format!(
-                                "Active: {}",
-                                crate::touch::custom::friendly_token_name(cur_tok)
-                            )
+                    {
+                        // MCPE custom buttons bind two keys; GoyControl keeps four slots.
+                        let slot_count = if is_mcpe_mode && ed.selected_custom.is_some() {
+                            2
                         } else {
-                            "Inactive (Cleared)".to_owned()
+                            4
                         };
-                        let ms_lbl = if is_ms {
-                            format!(
-                                "Active: {}",
-                                crate::touch::custom::friendly_token_name(cur_tok)
-                            )
-                        } else {
-                            "Inactive (Cleared)".to_owned()
-                        };
-                        let half_w = (ww - 24.0 - 8.0) * 0.5;
-                        for (ci, (title, status, active)) in [
-                            ("KEYBOARD BINDING (EXCLUSIVE)", kb_lbl.as_str(), is_kb),
-                            ("MOUSE / ACTION BINDING (EXCLUSIVE)", ms_lbl.as_str(), is_ms),
-                        ]
-                        .into_iter()
-                        .enumerate()
-                        {
-                            let ex = wx + 12.0 + ci as f32 * (half_w + 8.0);
-                            ui.rounded(
-                                ex,
-                                body_y,
-                                half_w,
-                                42.0,
-                                12.0,
-                                if active { st_cyan_soft } else { st_card },
-                            );
-                            ui.border(
-                                ex,
-                                body_y,
-                                half_w,
-                                42.0,
-                                12.0,
-                                if active { st_cyan } else { st_border },
-                            );
-                            ui.centered_fit(
-                                Face::SemiBold,
-                                8.8,
-                                [ex + 4.0, body_y + 4.0, half_w - 8.0, 16.0],
-                                if active { st_cyan } else { st_muted },
-                                title,
-                            );
-                            ui.centered_fit(
-                                Face::SemiBold,
-                                10.2,
-                                [ex + 4.0, body_y + 20.0, half_w - 8.0, 18.0],
-                                if active { st_text } else { st_muted },
-                                status,
-                            );
-                        }
-                    } else {
-                        let ew = (ww - 24.0 - 30.0) / 4.0;
-                        for slot in 0..4 {
+                        let ew = (ww - 24.0 - (slot_count as f32 - 1.0) * 10.0) / slot_count as f32;
+                        for slot in 0..slot_count {
                             let ex = wx + 12.0 + slot as f32 * (ew + 10.0);
                             let tok_name = if let Some(idx) = ed.selected_custom {
                                 tc.settings
@@ -7124,36 +7060,25 @@ pub fn touch_hud_editor(
                                                     && let Some(btn) =
                                                         tc.settings.custom_buttons.get_mut(idx)
                                                 {
+                                                    btn.set_event_slot(
+                                                        event_slot,
+                                                        (*tok).to_owned(),
+                                                    );
                                                     if is_mcpe {
-                                                        btn.set_exclusive_binding(
-                                                            (*tok).to_owned(),
-                                                        );
+                                                        btn.custom_label = btn.key_label();
+                                                    } else if event_slot == 0
+                                                        && (btn.custom_label.is_empty()
+                                                            || btn.custom_label == "BTN")
+                                                    {
                                                         btn.custom_label = (*lbl).to_owned();
-                                                    } else {
-                                                        btn.set_event_slot(
-                                                            event_slot,
-                                                            (*tok).to_owned(),
-                                                        );
-                                                        if event_slot == 0
-                                                            && (btn.custom_label.is_empty()
-                                                                || btn.custom_label == "BTN")
-                                                        {
-                                                            btn.custom_label = (*lbl).to_owned();
-                                                        }
                                                     }
                                                     let _ = tc.settings.save();
                                                 }
                                                 ed.picker_step = PickerStep::None;
-                                                ed.status_msg = Some(if is_mcpe {
-                                                    format!(
-                                                        "Bound key '{lbl}' (exclusive — mouse binding cleared)."
-                                                    )
-                                                } else {
-                                                    format!(
-                                                        "Assigned key '{lbl}' to Event Slot #{}.",
-                                                        event_slot + 1
-                                                    )
-                                                });
+                                                ed.status_msg = Some(format!(
+                                                    "Assigned key '{lbl}' to Key #{}.",
+                                                    event_slot + 1
+                                                ));
                                                 tc.clicked = true;
                                                 break;
                                             }
@@ -7474,10 +7399,9 @@ pub fn touch_hud_editor(
                         if let Some(idx) = ed.selected_custom
                             && let Some(btn) = tc.settings.custom_buttons.get_mut(idx)
                         {
+                            btn.set_event_slot(event_slot, String::new());
                             if is_mcpe {
-                                btn.set_exclusive_binding("key.keyboard.unknown".into());
-                            } else {
-                                btn.set_event_slot(event_slot, String::new());
+                                btn.custom_label = btn.key_label();
                             }
                             let _ = tc.settings.save();
                         }
@@ -7555,14 +7479,9 @@ pub fn touch_hud_editor(
                             if let Some(idx) = ed.selected_custom
                                 && let Some(btn) = tc.settings.custom_buttons.get_mut(idx)
                             {
+                                btn.set_event_slot(event_slot, (*tok).to_owned());
                                 if is_mcpe {
-                                    // Strict single-binding exclusivity in MCPE mode:
-                                    // selecting a mouse binding clears any keyboard binding.
-                                    btn.set_exclusive_binding((*tok).to_owned());
-                                    btn.custom_label =
-                                        crate::touch::custom::friendly_token_name(tok);
-                                } else {
-                                    btn.set_event_slot(event_slot, (*tok).to_owned());
+                                    btn.custom_label = btn.key_label();
                                 }
                                 if *tok == "mouse.look" {
                                     for l in &mut btn.layouts {
@@ -7572,11 +7491,10 @@ pub fn touch_hud_editor(
                                 let _ = tc.settings.save();
                             }
                             ed.picker_step = PickerStep::None;
-                            ed.status_msg = Some(if is_mcpe {
-                                format!("Bound '{lbl}' (exclusive — keyboard binding cleared).")
-                            } else {
-                                format!("Assigned '{lbl}' to Event Slot #{}.", event_slot + 1)
-                            });
+                            ed.status_msg = Some(format!(
+                                "Assigned '{lbl}' to Key #{}.",
+                                event_slot + 1
+                            ));
                             tc.clicked = true;
                             return false;
                         }
@@ -8219,23 +8137,15 @@ pub fn touch_hud_editor(
                     }
                 }
                 _ => {
-                    if tc.settings.control_style == ControlStyle::Mcpe
-                        && ed.selected_custom.is_some()
                     {
-                        let half_w = (ww - 24.0 - 8.0) * 0.5;
-                        if inside([wx + 12.0, body_y, half_w, 42.0]) {
-                            ed.picker_step = PickerStep::Keyboard { event_slot: 0 };
-                            tc.clicked = true;
-                            return false;
-                        }
-                        if inside([wx + 12.0 + half_w + 8.0, body_y, half_w, 42.0]) {
-                            ed.picker_step = PickerStep::MouseAndActions { event_slot: 0 };
-                            tc.clicked = true;
-                            return false;
-                        }
-                    } else {
-                        let ew = (ww - 24.0 - 30.0) / 4.0;
-                        for slot in 0..4 {
+                        let is_mcpe_style = tc.settings.control_style == ControlStyle::Mcpe;
+                        let slot_count = if is_mcpe_style && ed.selected_custom.is_some() {
+                            2
+                        } else {
+                            4
+                        };
+                        let ew = (ww - 24.0 - (slot_count as f32 - 1.0) * 10.0) / slot_count as f32;
+                        for slot in 0..slot_count {
                             let ex = wx + 12.0 + slot as f32 * (ew + 10.0);
                             if inside([ex, body_y, ew, 42.0]) {
                                 if ed.selected_custom.is_none() {
@@ -8257,7 +8167,7 @@ pub fn touch_hud_editor(
                                         event_slot: if tc.settings.control_style
                                             == ControlStyle::Mcpe
                                         {
-                                            0
+                                            slot.min(1)
                                         } else {
                                             slot
                                         },

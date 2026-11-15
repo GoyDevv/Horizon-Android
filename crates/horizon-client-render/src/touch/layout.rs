@@ -873,9 +873,9 @@ impl Settings {
         let is_mcpe = self.control_style == ControlStyle::Mcpe;
         for button in &mut self.custom_buttons {
             if is_mcpe {
-                // Enforce strict single-binding exclusivity in MCPE mode (Keyboard OR Mouse)
-                button.second_key.clear();
+                // MCPE buttons carry up to two keys; the extra GoyControl slots are dropped.
                 button.third_key.clear();
+                button.fourth_key.clear();
             }
             for p in &mut button.layouts {
                 p.sanitize();

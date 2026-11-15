@@ -1633,7 +1633,9 @@ impl Launcher {
                 let chip_h = 46.0;
                 let total_avail_h = (h - card_y - bottom_reserve).clamp(210.0, 360.0);
                 let hero_h = (total_avail_h - chip_h - 10.0).max(120.0);
-                let chip_y = card_y + hero_h + 10.0;
+                // Renderer / Frame rate / Controls tiles sit at the top, the hero banner below.
+                let chip_y = card_y;
+                let card_y = card_y + chip_h + 10.0;
 
                 // 1. Hero banner: the Horizon sunset behind the title, one compact Play split button.
                 ui.m3_tonal_card(content_x, card_y, content_w, hero_h, 18.0, true);
@@ -6803,6 +6805,16 @@ impl Launcher {
                 events.exit();
             }
             Some(Action::SettingsCat(cat)) => {
+                if self.catalog.page != Page::Settings {
+                    // Tapped from another page (e.g. the Home Controls tile): switch first.
+                    self.catalog.editing = None;
+                    self.catalog.project_modal = None;
+                    self.catalog.modal_worker = None;
+                    if crate::platform::active() {
+                        crate::platform::hide();
+                    }
+                    self.catalog.page = Page::Settings;
+                }
                 self.catalog.settings_category = cat;
                 self.catalog.scroll = 0.0;
                 self.anim.trigger_page_transition();

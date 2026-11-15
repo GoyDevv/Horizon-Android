@@ -616,13 +616,8 @@ impl TouchControls {
                         if layout::contains(key_rect(i), p)
                             && let Some(index) = e.selected_custom
                         {
-                            let is_mcpe = self.settings.control_style == ControlStyle::Mcpe;
                             if let Some(btn) = self.settings.custom_buttons.get_mut(index) {
-                                if is_mcpe {
-                                    btn.set_exclusive_binding(token);
-                                } else {
-                                    btn.key = token;
-                                }
+                                btn.set_event_slot(0, token);
                             }
                             e.key_picker = false;
                             break;
@@ -847,14 +842,13 @@ impl TouchControls {
                 _ => 0,
             };
             let lbl = super::custom::friendly_token_name(name);
+            // MCPE buttons carry up to two keys; the label lists them all.
+            let slot = if is_mcpe { slot.min(1) } else { slot };
+            btn.set_event_slot(slot, name.into());
             if is_mcpe {
-                btn.set_exclusive_binding(name.into());
+                btn.custom_label = btn.key_label();
+            } else if slot == 0 && (btn.custom_label.is_empty() || btn.custom_label == "BTN") {
                 btn.custom_label = lbl.clone();
-            } else {
-                btn.set_event_slot(slot, name.into());
-                if slot == 0 && (btn.custom_label.is_empty() || btn.custom_label == "BTN") {
-                    btn.custom_label = lbl.clone();
-                }
             }
             e.key_picker = false;
             e.picker_step = PickerStep::None;

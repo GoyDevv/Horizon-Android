@@ -443,7 +443,7 @@ class LauncherOverhaulTests(unittest.TestCase):
         self.assertIn("pub fn set_exclusive_binding(&mut self, token: String)", custom)
         self.assertIn("pub fn is_keyboard_binding(token: &str) -> bool", custom)
         self.assertIn("pub fn is_mouse_binding(token: &str) -> bool", custom)
-        self.assertIn("set_exclusive_binding", editor)
+        self.assertIn("set_event_slot(0, token)", editor)
 
         # 13. Rust Edition in-game UI & menu performance
         self.assertIn("pub fn blit_cached(", menu_blur)
@@ -1211,7 +1211,7 @@ class LauncherOverhaulTests(unittest.TestCase):
             touch_ui_flat,
         )
         self.assertIn('"Snap to Grid & Neighbor Buttons: ON"', touch_ui)
-        self.assertIn("let ew = (ww - 24.0 - 30.0) / 4.0;", touch_ui)
+        self.assertIn("let slot_count = if is_mcpe_mode && ed.selected_custom.is_some()", touch_ui)
         self.assertIn("let bw = (ww - 24.0 - 30.0) / 4.0;", touch_ui)
 
         # 4. New Bricolage Grotesque font, toned-down Material 3 radii, animated background & M3 downloading screen
