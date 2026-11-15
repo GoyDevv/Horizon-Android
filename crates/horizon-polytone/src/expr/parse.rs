@@ -331,7 +331,7 @@ impl Parser {
                 "PI" => Expr::Const(Value::Num(std::f64::consts::PI)),
                 "TAU" => Expr::Const(Value::Num(std::f64::consts::TAU)),
                 "E" => Expr::Const(Value::Num(std::f64::consts::E)),
-                "PSI" => Expr::Const(Value::Num(std::f64::consts::GOLDEN_RATIO)),
+                "PSI" => Expr::Const(Value::Num(1.618_033_988_749_895)),
                 _ => match (
                     Root::parse(&name),
                     self.locals.iter().position(|l| *l == name),

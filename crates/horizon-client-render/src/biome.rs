@@ -159,6 +159,7 @@ struct Colormaps {
     grass: Vec<u32>,
     foliage: Vec<u32>,
     dry: Vec<u32>,
+    polytone: horizon_polytone::biome_colors::BiomeOverrides,
 }
 fn color(v: &Value) -> Option<u32> {
     match v {
@@ -233,13 +234,29 @@ impl BiomeInfo {
             downfall,
             precipitation: v["has_precipitation"].as_bool().unwrap_or(true),
             grass: color(&effects["grass_color"])
+                .or_else(|| {
+                    maps.polytone
+                        .grass(f64::from(temperature), f64::from(downfall))
+                })
                 .unwrap_or_else(|| sample(&maps.grass, temperature, downfall, 0xFF00FF)),
             modifier,
             foliage: color(&effects["foliage_color"])
+                .or_else(|| {
+                    maps.polytone
+                        .foliage(f64::from(temperature), f64::from(downfall))
+                })
                 .unwrap_or_else(|| sample(&maps.foliage, temperature, downfall, 0x48B518)),
             dry_foliage: color(&effects["dry_foliage_color"])
+                .or_else(|| {
+                    maps.polytone
+                        .dry_foliage(f64::from(temperature), f64::from(downfall))
+                })
                 .unwrap_or_else(|| sample(&maps.dry, temperature, downfall, 0x5D4930)),
-            water: color(&effects["water_color"]).unwrap_or(0x3F76E4),
+            water: maps
+                .polytone
+                .water(f64::from(temperature), f64::from(downfall))
+                .or_else(|| color(&effects["water_color"]))
+                .unwrap_or(0x3F76E4),
             sky: color(&attributes["minecraft:visual/sky_color"]),
             fog: color(&attributes["minecraft:visual/fog_color"]),
             water_fog: color(&attributes["minecraft:visual/water_fog_color"]).unwrap_or(0x050533),
@@ -274,6 +291,7 @@ impl Biomes {
             grass: colormap(root, "grass")?,
             foliage: colormap(root, "foliage")?,
             dry: colormap(root, "dry_foliage")?,
+            polytone: horizon_polytone::biome_colors::BiomeOverrides::read(root),
         };
         let mut list = Vec::new();
         let mut names: Vec<_> = fs::read_dir(root.join("data/minecraft/worldgen/biome"))?
@@ -463,6 +481,7 @@ mod pack_tests {
             grass: Vec::new(),
             foliage: Vec::new(),
             dry: Vec::new(),
+            polytone: Default::default(),
         };
         let list: Vec<BiomeInfo> = names
             .iter()
@@ -531,6 +550,43 @@ mod pack_tests {
         assert!(!other.contains("minecraft:molten_peaks"));
         assert_eq!(other.get(2).water, 0x3F76E4);
         assert!(!other.has_packs());
+    }
+
+    #[test]
+    fn a_polytone_pack_replaces_the_colour_functions_not_a_biomes_own_colours() {
+        let root =
+            std::env::temp_dir().join(format!("horizon-polytone-biomes-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("assets/foo/polytone")).unwrap();
+        std::fs::write(
+            root.join("assets/foo/polytone/colors.json"),
+            r##"{"biome_colors": {"grass": "#112233", "foliage": "#445566", "water": "#778899"}}"##,
+        )
+        .unwrap();
+        let maps = Colormaps {
+            grass: Vec::new(),
+            foliage: Vec::new(),
+            dry: Vec::new(),
+            polytone: horizon_polytone::biome_colors::BiomeOverrides::read(&root),
+        };
+        let plain = BiomeInfo::from_json("minecraft:plains".to_owned(), &json!({}), &maps);
+        assert_eq!(plain.grass, 0x112233);
+        assert_eq!(plain.foliage, 0x445566);
+        assert_eq!(plain.water, 0x778899);
+        assert_eq!(plain.dry_foliage, 0x5D4930);
+        let own = json!({"effects": {
+            "grass_color": "#ABCDEF", "foliage_color": "#FEDCBA", "water_color": "#010203"
+        }});
+        let own = BiomeInfo::from_json("x:own".to_owned(), &own, &maps);
+        assert_eq!(own.grass, 0xABCDEF);
+        assert_eq!(own.foliage, 0xFEDCBA);
+        assert_eq!(own.water, 0x778899);
+
+        let mut base = builtin(&["minecraft:plains"]);
+        base.colormaps = Arc::new(maps);
+        let packed = base.with_packs([("pack:new", &json!({}))]);
+        assert_eq!(packed.get(packed.id("pack:new")).grass, 0x112233);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
 

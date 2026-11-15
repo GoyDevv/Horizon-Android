@@ -8,6 +8,7 @@ description = "Polytone-format resource pack files: targets, and the biome and d
 
 [dependencies]
 log = "0.4"
+png = "0.18"
 regex = { version = "1", default-features = false, features = ["std", "unicode-perl"] }
 serde_json = "1"
 

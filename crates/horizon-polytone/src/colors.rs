@@ -362,7 +362,7 @@ impl PackColors {
     }
 }
 
-fn parse_color(value: &Json) -> Option<u32> {
+pub(crate) fn parse_color(value: &Json) -> Option<u32> {
     match value {
         Json::Number(n) => n.as_i64().map(|v| v as u32),
         Json::String(s) => {

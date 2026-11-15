@@ -1790,6 +1790,7 @@ dependencies = [
  "horizon-hdr",
  "horizon-items",
  "horizon-narrator",
+ "horizon-polytone",
  "horizon-protocol",
  "horizon-shader-api",
  "horizon-shaders",
@@ -1934,6 +1935,16 @@ name = "horizon-optifine"
 version = "0.1.0"
 dependencies = [
  "regex",
+]
+
+[[package]]
+name = "horizon-polytone"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "png",
+ "regex",
+ "serde_json",
 ]
 
 [[package]]
