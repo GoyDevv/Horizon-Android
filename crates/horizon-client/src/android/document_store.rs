@@ -316,7 +316,8 @@ pub fn call(home: &Path, op: &str, id: &str, arg: &str) -> io::Result<Value> {
                 let p = profile(home);
                 let folder = if op == "mkdir" {
                     "worlds"
-                } else if arg.ends_with(".hmod") || arg.ends_with(".hnmod") || arg.ends_with(".jar") {
+                } else if arg.ends_with(".hmod") || arg.ends_with(".hnmod") || arg.ends_with(".jar")
+                {
                     "mods"
                 } else if arg.ends_with(".hshader") {
                     "shaders"
@@ -594,6 +595,12 @@ pub const PROTECTED_SYSTEM_NAMES: &[&str] = &[
     "profiles",
 ];
 
+const LIVE_REPORT_FILES: &[&str] = &[
+    "current-session.json",
+    "current-session.partial",
+    "diagnostic.log",
+];
+
 pub const FM_ROOT_DIRS: &[(&str, &str)] = &[
     ("", "Root"),
     ("saves", "Worlds"),
@@ -746,13 +753,21 @@ pub fn sync_mods_folder(profile_root: &Path) {
                 continue;
             }
             let path = entry.path();
-            let Some(name_str) = path.file_name().and_then(|s| s.to_str()) else { continue };
+            let Some(name_str) = path.file_name().and_then(|s| s.to_str()) else {
+                continue;
+            };
             let _lower = name_str.to_ascii_lowercase();
             #[cfg(target_os = "android")]
             if _lower.ends_with(".jar") {
-                let _ = horizon_client::jar_transpiler::transpile_jar_to_horizon_mods(&path, profile_root);
+                let _ = horizon_client::jar_transpiler::transpile_jar_to_horizon_mods(
+                    &path,
+                    profile_root,
+                );
             } else if _lower.ends_with(".hnmod") {
-                let _ = horizon_client::jar_transpiler::compile_hnmod_bundle_realtime(&path, profile_root);
+                let _ = horizon_client::jar_transpiler::compile_hnmod_bundle_realtime(
+                    &path,
+                    profile_root,
+                );
             }
         }
     }
@@ -764,11 +779,18 @@ pub fn sync_mods_folder(profile_root: &Path) {
                     continue;
                 }
                 let path = entry.path();
-                let Some(name_str) = path.file_name().and_then(|s| s.to_str()) else { continue };
+                let Some(name_str) = path.file_name().and_then(|s| s.to_str()) else {
+                    continue;
+                };
                 let _lower = name_str.to_ascii_lowercase();
                 #[cfg(target_os = "android")]
                 if _lower.ends_with(".jar") {
-                    if horizon_client::jar_transpiler::transpile_jar_to_horizon_mods(&path, profile_root).is_ok() {
+                    if horizon_client::jar_transpiler::transpile_jar_to_horizon_mods(
+                        &path,
+                        profile_root,
+                    )
+                    .is_ok()
+                    {
                         let _ = fs::remove_file(&path);
                     }
                 }
@@ -919,6 +941,9 @@ pub fn list_fm_dir(
             continue;
         };
         if validate_entry_name(name_str).is_err() {
+            continue;
+        }
+        if clean_rel == "performance" && LIVE_REPORT_FILES.contains(&name_str) {
             continue;
         }
         let Ok(smeta) = fs::symlink_metadata(item.path()) else {
@@ -1108,9 +1133,14 @@ pub fn fm_delete(
         } else {
             fs::remove_file(&path).map_err(|e| e.to_string())?;
         }
+        if clean.starts_with("performance/previous-") {
+            crate::diagnostics::skip_next_promotion(home);
+        }
         if let Some(mod_file) = clean.strip_prefix("horizon-mods/") {
             let native_copy = profile_root.join("horizon-native-mods").join(mod_file);
-            if native_copy.exists() && fs::symlink_metadata(&native_copy).is_ok_and(|m| !m.file_type().is_symlink()) {
+            if native_copy.exists()
+                && fs::symlink_metadata(&native_copy).is_ok_and(|m| !m.file_type().is_symlink())
+            {
                 let _ = fs::remove_file(&native_copy);
             }
             let mod_id = mod_file
@@ -1420,8 +1450,12 @@ pub fn extract_world_zip_if_valid(
     };
     let mut level_dat_prefix: Option<String> = None;
     for i in 0..archive.len() {
-        let Ok(entry) = archive.by_index(i) else { continue };
-        let Ok(entry_name) = entry.name() else { continue };
+        let Ok(entry) = archive.by_index(i) else {
+            continue;
+        };
+        let Ok(entry_name) = entry.name() else {
+            continue;
+        };
         let name = entry_name.replace('\\', "/");
         if name == "level.dat" {
             level_dat_prefix = Some(String::new());
@@ -1450,7 +1484,13 @@ pub fn extract_world_zip_if_valid(
     };
     let sanitized: String = raw_world_name
         .chars()
-        .map(|c| if c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c })
+        .map(|c| {
+            if c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') {
+                '_'
+            } else {
+                c
+            }
+        })
         .collect::<String>()
         .trim()
         .to_owned();
@@ -1469,8 +1509,12 @@ pub fn extract_world_zip_if_valid(
         .into_owned();
 
     for i in 0..archive.len() {
-        let Ok(mut entry) = archive.by_index(i) else { continue };
-        let Ok(entry_name) = entry.name() else { continue };
+        let Ok(mut entry) = archive.by_index(i) else {
+            continue;
+        };
+        let Ok(entry_name) = entry.name() else {
+            continue;
+        };
         let full_name = entry_name.replace('\\', "/");
         let rel = if prefix.is_empty() {
             full_name.as_str()

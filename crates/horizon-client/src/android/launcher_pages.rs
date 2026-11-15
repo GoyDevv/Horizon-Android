@@ -1691,17 +1691,35 @@ impl Launcher {
                         1.5,
                         my3_accent(),
                     );
-                    let spin = self
+                    let started = *self
                         .anim
                         .launch_started
-                        .map_or(0.0, |t| (t.elapsed().as_secs_f32() * 0.9) % 1.0);
-                    ui.m3_wavy_circular_spinner(split_x + 26.0, split_y + split_h * 0.5, 9.0, spin);
+                        .get_or_insert_with(std::time::Instant::now);
+                    let waited = started.elapsed().as_secs_f32();
+                    let target = if self.session_worker.is_some() {
+                        0.2 + 0.2 * (1.0 - (-waited * 0.4).exp())
+                    } else {
+                        0.5 + 0.4 * (1.0 - (-waited * 0.5).exp())
+                    };
+                    self.anim.progress_smooth += (target - self.anim.progress_smooth) * 0.1;
                     ui.centered_fit(
                         Face::SemiBold,
                         14.0,
-                        [split_x + 44.0, split_y, split_total_w - 54.0, split_h],
+                        [split_x + 12.0, split_y + 4.0, split_total_w - 24.0, 24.0],
                         my3_text(),
-                        "Starting...",
+                        "Starting",
+                    );
+                    let bar_x = split_x + 14.0;
+                    let bar_w = split_total_w - 28.0;
+                    let bar_y = split_y + split_h - 14.0;
+                    ui.rounded(bar_x, bar_y, bar_w, 6.0, 3.0, my3_track());
+                    ui.rounded(
+                        bar_x,
+                        bar_y,
+                        (bar_w * self.anim.progress_smooth.clamp(0.0, 1.0)).max(6.0),
+                        6.0,
+                        3.0,
+                        my3_accent(),
                     );
                 } else {
                     let play_label = if installed {
@@ -2377,64 +2395,8 @@ impl Launcher {
             }
         }
 
-        if self.launching {
-            let started = *self
-                .anim
-                .launch_started
-                .get_or_insert_with(std::time::Instant::now);
-            let t = started.elapsed().as_secs_f32();
-            let reduced = horizon_client::ui_theme::motion::reduced_motion();
-            ui.rounded(0.0, 0.0, w, h, 0.0, color::with_alpha(my3_bg(), 0.86));
-            self.targets.push((
-                [0.0, 0.0, w.max(4000.0), h.max(4000.0)],
-                Action::FmDismissMenu,
-            ));
-            let card_w = (w - 32.0).clamp(220.0, 340.0);
-            let card_h = 196.0;
-            let card_x = (w - card_w) * 0.5;
-            let card_y = ((h - card_h) * 0.5).max(8.0);
-            ui.rounded(card_x, card_y, card_w, card_h, 24.0, my3_surface_high());
-            ui.stroke_rounded(card_x, card_y, card_w, card_h, 24.0, 1.0, my3_border());
-            ui.m3_wavy_circular_spinner(
-                card_x + card_w * 0.5,
-                card_y + 50.0,
-                24.0,
-                (t * 0.9) % 1.0,
-            );
-            ui.centered_fit(
-                Face::SemiBold,
-                17.0,
-                [card_x + 16.0, card_y + 88.0, card_w - 32.0, 26.0],
-                my3_text(),
-                "Starting Minecraft 26.3",
-            );
-            let stage = if self.catalog.status.is_empty() {
-                "Starting the engine..."
-            } else {
-                self.catalog.status.as_str()
-            };
-            let stage = ui.fit_text(Face::Regular, 12.5, stage, card_w - 40.0);
-            ui.centered_fit(
-                Face::Regular,
-                12.5,
-                [card_x + 20.0, card_y + 118.0, card_w - 40.0, 20.0],
-                my3_muted(),
-                &stage,
-            );
-            let bar_x = card_x + 24.0;
-            let bar_w = card_w - 48.0;
-            let bar_y = card_y + 158.0;
-            let bar_h = 8.0;
-            ui.rounded(bar_x, bar_y, bar_w, bar_h, bar_h * 0.5, my3_track());
-            let seg_w = bar_w * 0.38;
-            let cycle = if reduced { 0.5 } else { (t * 0.75) % 1.0 };
-            let eased = cycle * cycle * (3.0 - 2.0 * cycle);
-            let seg_x = bar_x - seg_w + (bar_w + seg_w) * eased;
-            ui.clipped([bar_x, bar_y, bar_w, bar_h], |ui| {
-                ui.rounded(seg_x, bar_y, seg_w, bar_h, bar_h * 0.5, my3_accent());
-            });
-        } else {
-            self.anim.launch_started = None;
+        if !self.launching && self.anim.launch_started.take().is_some() {
+            self.anim.progress_smooth = 0.0;
         }
 
         ui.set_stagger_transition(1.0, 0.0, 0.0);

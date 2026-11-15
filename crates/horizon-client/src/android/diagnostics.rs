@@ -72,6 +72,12 @@ fn atomic_json(path: &Path, value: &Value) -> io::Result<()> {
     fs::write(&temp, serde_json::to_vec_pretty(value)?)?;
     fs::rename(temp, path)
 }
+pub fn skip_next_promotion(home: &Path) {
+    let dir = home.join("performance");
+    if fs::create_dir_all(&dir).is_ok() {
+        let _ = fs::write(dir.join(".skip-promotion"), b"");
+    }
+}
 pub fn initialize(home: &Path, device: Value) -> io::Result<()> {
     let mut state = STATE.lock().unwrap_or_else(|e| e.into_inner());
     if state.is_some() {
@@ -79,12 +85,17 @@ pub fn initialize(home: &Path, device: Value) -> io::Result<()> {
     }
     let dir = home.join("performance");
     fs::create_dir_all(&dir)?;
-    for (old, new) in [
-        ("current-session.json", "previous-session.json"),
-        ("diagnostic.log", "previous-diagnostic.log"),
-    ] {
-        if let Ok(data) = tail(&dir.join(old), LOG_LIMIT) {
-            fs::write(dir.join(new), data)?;
+    let skip = dir.join(".skip-promotion");
+    if skip.exists() {
+        let _ = fs::remove_file(&skip);
+    } else {
+        for (old, new) in [
+            ("current-session.json", "previous-session.json"),
+            ("diagnostic.log", "previous-diagnostic.log"),
+        ] {
+            if let Ok(data) = tail(&dir.join(old), LOG_LIMIT) {
+                fs::write(dir.join(new), data)?;
+            }
         }
     }
     let session = json!({"schema":1,"pid":std::process::id(),"start_ms":timestamp(),

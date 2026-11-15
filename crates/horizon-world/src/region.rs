@@ -520,7 +520,19 @@ impl RegionWriter {
         }
         self.file.sync_all()?;
         // Hard-link publication fails atomically if another writer won the name.
-        fs::hard_link(&self.temporary, &self.destination)?;
+        match fs::hard_link(&self.temporary, &self.destination) {
+            Ok(()) => {}
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => return Err(e),
+            Err(_) => {
+                if self.destination.try_exists()? {
+                    return Err(io::Error::new(
+                        io::ErrorKind::AlreadyExists,
+                        "destination region already exists",
+                    ));
+                }
+                fs::rename(&self.temporary, &self.destination)?;
+            }
+        }
         self.committed = true;
         Ok(())
     }

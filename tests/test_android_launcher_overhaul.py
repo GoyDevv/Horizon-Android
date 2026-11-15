@@ -338,7 +338,7 @@ class LauncherOverhaulTests(unittest.TestCase):
 
         # Main Launcher "Launching..." state & Virtual Mouse Speed slider
         self.assertIn("pub(super) launching: bool,", launcher)
-        self.assertIn('"Starting Minecraft 26.3"', launcher_pages)
+        self.assertIn('"Starting"', launcher_pages)
         self.assertIn("pub mouse_speed_dragging: bool,", touch_ui)
 
 
