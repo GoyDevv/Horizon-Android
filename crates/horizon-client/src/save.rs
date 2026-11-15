@@ -224,8 +224,73 @@ pub fn upgrade_older_world_with(
         .into());
     }
     make_world_writable(world);
-    horizon_world::datafix::files::upgrade_world_with(world, progress)
-        .map_err(|e| format!("upgrading {}: {e}", world.display()))?;
+    match horizon_world::datafix::files::upgrade_world_with(world, progress) {
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            upgrade_through_copy(world, progress).map_err(|copy| {
+                format!(
+                    "upgrading {}: {e}; rebuilding it failed: {copy}",
+                    world.display()
+                )
+                .into()
+            })
+        }
+        Err(e) => Err(format!("upgrading {}: {e}", world.display()).into()),
+    }
+}
+
+fn copy_world_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+    let annotate = |path: &Path, e: std::io::Error| {
+        std::io::Error::new(e.kind(), format!("{}: {e}", path.display()))
+    };
+    std::fs::create_dir_all(to).map_err(|e| annotate(to, e))?;
+    for entry in std::fs::read_dir(from).map_err(|e| annotate(from, e))? {
+        let entry = entry.map_err(|e| annotate(from, e))?;
+        let source = entry.path();
+        let target = to.join(entry.file_name());
+        let kind = entry.file_type().map_err(|e| annotate(&source, e))?;
+        if kind.is_dir() {
+            copy_world_tree(&source, &target)?;
+        } else if kind.is_file() {
+            let mut input = std::fs::File::open(&source).map_err(|e| annotate(&source, e))?;
+            let mut output = std::fs::File::create(&target).map_err(|e| annotate(&target, e))?;
+            std::io::copy(&mut input, &mut output).map_err(|e| annotate(&source, e))?;
+        }
+    }
+    Ok(())
+}
+
+fn upgrade_through_copy(
+    world: &Path,
+    progress: &horizon_world::datafix::progress::UpgradeProgress,
+) -> std::io::Result<()> {
+    let name = world
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let parent = world.parent().unwrap_or_else(|| Path::new("."));
+    let copy = parent.join(format!(".{name}.rebuild"));
+    let old = parent.join(format!(".{name}.original"));
+    let _ = std::fs::remove_dir_all(&copy);
+    let _ = std::fs::remove_dir_all(&old);
+    let result = copy_world_tree(world, &copy).and_then(|()| {
+        make_world_writable(&copy);
+        horizon_world::datafix::files::upgrade_world_with(&copy, progress).map(|_| ())
+    });
+    if let Err(e) = result {
+        let _ = std::fs::remove_dir_all(&copy);
+        return Err(e);
+    }
+    std::fs::rename(world, &old)
+        .map_err(|e| std::io::Error::new(e.kind(), format!("{}: {e}", world.display())))?;
+    if let Err(e) = std::fs::rename(&copy, world) {
+        let _ = std::fs::rename(&old, world);
+        return Err(std::io::Error::new(
+            e.kind(),
+            format!("{}: {e}", copy.display()),
+        ));
+    }
+    let _ = std::fs::remove_dir_all(&old);
     Ok(())
 }
 
@@ -7004,9 +7069,18 @@ mod writable_tests {
         std::fs::set_permissions(&region, std::fs::Permissions::from_mode(0o555)).unwrap();
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o555)).unwrap();
         make_world_writable(&root);
-        assert_eq!(std::fs::metadata(&file).unwrap().permissions().mode() & 0o600, 0o600);
-        assert_eq!(std::fs::metadata(&region).unwrap().permissions().mode() & 0o700, 0o700);
-        assert_eq!(std::fs::metadata(&root).unwrap().permissions().mode() & 0o700, 0o700);
+        assert_eq!(
+            std::fs::metadata(&file).unwrap().permissions().mode() & 0o600,
+            0o600
+        );
+        assert_eq!(
+            std::fs::metadata(&region).unwrap().permissions().mode() & 0o700,
+            0o700
+        );
+        assert_eq!(
+            std::fs::metadata(&root).unwrap().permissions().mode() & 0o700,
+            0o700
+        );
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

@@ -27,6 +27,10 @@ fn canceled() -> io::Error {
     io::Error::new(io::ErrorKind::Interrupted, "the world upgrade was canceled")
 }
 
+fn at(path: &Path) -> impl FnOnce(io::Error) -> io::Error + '_ {
+    move |e| io::Error::new(e.kind(), format!("{}: {e}", path.display()))
+}
+
 fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
 }
@@ -36,7 +40,7 @@ pub fn read_dat(path: &Path) -> io::Result<Option<Tag>> {
     let bytes = match fs::read(path) {
         Ok(b) => b,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(e),
+        Err(e) => return Err(at(path)(e)),
     };
     let limits = Limits::default();
     let raw = Compression::Gzip.decode(&bytes, limits.max_bytes)?;
@@ -49,7 +53,7 @@ pub fn read_saved_dat(path: &Path) -> io::Result<Option<Tag>> {
     let bytes = match fs::read(path) {
         Ok(b) => b,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(e),
+        Err(e) => return Err(at(path)(e)),
     };
     let limits = Limits::default();
     let raw = if bytes.starts_with(&[0x1f, 0x8b]) {
@@ -64,14 +68,14 @@ pub fn read_saved_dat(path: &Path) -> io::Result<Option<Tag>> {
 /// `NbtIo.writeCompressed`, creating the parent folders.
 pub fn write_dat(path: &Path, tag: &Tag) -> io::Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent).map_err(at(parent))?;
     }
     let root = NamedTag {
         name: JavaString::default(),
         tag: tag.clone(),
     };
     let raw = nbt::write_named(&root, Limits::default()).map_err(|e| invalid(e.to_string()))?;
-    fs::write(path, Compression::Gzip.encode(&raw)?)
+    fs::write(path, Compression::Gzip.encode(&raw)?).map_err(at(path))
 }
 
 /// `NbtUtils.getDataVersion`.
@@ -117,25 +121,33 @@ fn move_file(base: &Path, from: &str, to: &str) -> io::Result<()> {
         ));
     }
     if let Some(parent) = to.parent() {
-        fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent).map_err(at(parent))?;
     }
-    fs::rename(from, to)
+    fs::rename(&from, &to).map_err(|e| {
+        io::Error::new(
+            e.kind(),
+            format!("moving {} to {}: {e}", from.display(), to.display()),
+        )
+    })
 }
 
 /// `FileFixUtil.deleteFileOrEmptyDirectory`.
 fn delete(base: &Path, relative: &str) -> io::Result<()> {
     let path = resolve(base, relative);
     if path.is_dir() {
-        let entries: Vec<_> = fs::read_dir(&path)?.collect::<Result<_, _>>()?;
+        let entries: Vec<_> = fs::read_dir(&path)
+            .map_err(at(&path))?
+            .collect::<Result<_, _>>()
+            .map_err(at(&path))?;
         if entries.len() == 1 && entries[0].file_name() == ".DS_Store" {
             let _ = fs::remove_file(entries[0].path());
         }
         if fs::read_dir(&path)?.next().is_some() {
             return Ok(());
         }
-        fs::remove_dir(&path)
+        fs::remove_dir(&path).map_err(at(&path))
     } else if path.exists() {
-        fs::remove_file(&path)
+        fs::remove_file(&path).map_err(at(&path))
     } else {
         Ok(())
     }
@@ -316,7 +328,8 @@ fn regex_move(folder: &Path, rename: impl Fn(&str) -> Option<String>) -> io::Res
     if !folder.is_dir() {
         return Ok(());
     }
-    let mut names: Vec<String> = fs::read_dir(folder)?
+    let mut names: Vec<String> = fs::read_dir(folder)
+        .map_err(at(folder))?
         .filter_map(Result::ok)
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .collect();
@@ -738,7 +751,7 @@ fn upgrade_regions(
     let limits = Limits::default();
     for path in files_with_suffix(folder, ".mca") {
         progress.check()?;
-        let mut region = RegionFile::open(&path)?;
+        let mut region = RegionFile::open(&path).map_err(at(&path))?;
         let positions: Vec<_> = region.chunks().map(|(p, _)| p).collect();
         let mut records = Vec::new();
         for pos in positions {
@@ -754,16 +767,16 @@ fn upgrade_regions(
         }
         drop(region);
         let staging = folder.join(".datafix");
-        fs::create_dir_all(&staging)?;
+        fs::create_dir_all(&staging).map_err(at(&staging))?;
         let temporary = staging.join(path.file_name().unwrap_or_default());
         let _ = fs::remove_file(&temporary);
-        let mut writer = RegionWriter::create(&temporary)?;
+        let mut writer = RegionWriter::create(&temporary).map_err(at(&temporary))?;
         for (pos, record) in &records {
             writer.write(*pos, record)?;
         }
         writer.finish()?;
-        fs::rename(&temporary, &path)?;
-        fs::remove_dir(&staging)?;
+        fs::rename(&temporary, &path).map_err(at(&path))?;
+        fs::remove_dir(&staging).map_err(at(&staging))?;
         progress.progress.increment_finished_operations();
     }
     Ok(())
@@ -805,7 +818,7 @@ fn saved_data_files(data: &Path) -> io::Result<Vec<PathBuf>> {
     }
     let mut stack = vec![data.to_path_buf()];
     while let Some(dir) = stack.pop() {
-        for entry in fs::read_dir(&dir)?.filter_map(Result::ok) {
+        for entry in fs::read_dir(&dir).map_err(at(&dir))?.filter_map(Result::ok) {
             let p = entry.path();
             if p.is_dir() {
                 stack.push(p);
@@ -873,7 +886,7 @@ fn upgrade_json(path: &Path, ty: Ty) -> io::Result<()> {
 }
 
 fn upgrade_json_to(path: &Path, ty: Ty, to: i32) -> io::Result<()> {
-    let text = fs::read_to_string(path)?;
+    let text = fs::read_to_string(path).map_err(at(path))?;
     let units: Vec<u16> = text.encode_utf16().collect();
     let parsed = json::parse_lenient(&units)
         .ok_or_else(|| invalid(format!("bad JSON in {}", path.display())))?;
@@ -886,7 +899,7 @@ fn upgrade_json_to(path: &Path, ty: Ty, to: i32) -> io::Result<()> {
     update(ty, &mut tag, from, to);
     set(&mut tag, "DataVersion", Tag::Int(to));
     let out = json::to_stable_string(&tag_to_json(&tag));
-    fs::write(path, String::from_utf16_lossy(&out))
+    fs::write(path, String::from_utf16_lossy(&out)).map_err(at(path))
 }
 
 /// Everything vanilla upgrades as it reads a world, done at once: every chunk,

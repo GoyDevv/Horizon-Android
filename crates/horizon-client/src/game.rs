@@ -19133,7 +19133,17 @@ impl Game<'_> {
             let upgrade_canceled = loader.upgrade.is_canceled();
             let prepared = loader.finish();
             if !(cancelled || upgrade_canceled && prepared.is_err()) {
-                self.finish_open_world(prepared?)?;
+                match prepared {
+                    Ok(prepared) => self.finish_open_world(prepared)?,
+                    Err(error) if self.title.is_some() => {
+                        log::error!("Horizon: opening the world failed: {error}");
+                        self.pending_entry = None;
+                        if let Some(title) = self.title.as_mut() {
+                            title.failed(error);
+                        }
+                    }
+                    Err(error) => return Err(error),
+                }
             }
         }
         if self.rest_loader.is_some() {
