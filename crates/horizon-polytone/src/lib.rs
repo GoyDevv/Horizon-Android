@@ -10,16 +10,23 @@
 //! ([`expr::Program`]) their values and other files use.
 mod attributes;
 pub mod biome_colors;
+pub mod block_modifiers;
 pub mod colormaps;
 pub mod colors;
 pub mod creative_tabs;
 pub mod expr;
+mod files;
+pub mod fluid_modifiers;
+pub mod item_modifiers;
 mod modifiers;
 pub mod pack;
 pub mod particles;
+mod set;
 pub mod sprites;
 mod target;
+pub mod tint;
 
 pub use attributes::{Argument, Attributes, Layer, Modifier, normalize_attribute};
 pub use modifiers::{BiomeModifier, DimensionModifier};
+pub use set::Modifiers;
 pub use target::{Target, Targets, implicit_id};

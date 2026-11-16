@@ -5,7 +5,10 @@ use crate::target::Targets;
 use serde_json::Value;
 
 /// The fields every modifier shares. `None` when the file is switched off (`polytone_ignore`).
-fn common(json: &Value, implicit: Option<&str>) -> Result<Option<(Targets, i32)>, String> {
+pub(crate) fn common(
+    json: &Value,
+    implicit: Option<&str>,
+) -> Result<Option<(Targets, i32)>, String> {
     if json.get("polytone_ignore").and_then(Value::as_bool) == Some(true) {
         return Ok(None);
     }

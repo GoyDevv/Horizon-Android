@@ -289,7 +289,7 @@ struct Files {
     textures: BTreeMap<i32, PathBuf>,
 }
 
-fn split_tint(stem: &str) -> (&str, i32) {
+pub(crate) fn split_tint(stem: &str) -> (&str, i32) {
     if let Some((name, tail)) = stem.rsplit_once('_') {
         if !name.is_empty() {
             if let Ok(tint) = tail.parse::<i32>() {

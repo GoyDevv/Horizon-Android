@@ -2,6 +2,8 @@ use std::path::Path;
 
 use crate::colormaps::Colormaps;
 use crate::colors::{BiomeColor, PackColors};
+use crate::fluid_modifiers::{FluidModifier, water_tag};
+use crate::tint::Tint;
 
 const BUILTIN: [&str; 3] = ["grass_color", "foliage_color", "water_color"];
 const TINT: i32 = 0;
@@ -18,16 +20,30 @@ pub struct BiomeOverrides {
     foliage: Option<Choice>,
     dry_foliage: Option<Choice>,
     water: Option<Choice>,
+    fluid_water: Option<Tint>,
     maps: Colormaps,
 }
 
 impl BiomeOverrides {
     pub fn read(root: &Path) -> Self {
         let colors = PackColors::read(root);
-        if colors.is_empty() {
+        let fluids = FluidModifier::read(root);
+        if colors.is_empty() && fluids.is_empty() {
             return Self::default();
         }
-        Self::from_parts(&colors, Colormaps::read(root))
+        let maps = Colormaps::read(root);
+        let mut overrides = Self::from_parts(&colors, maps);
+        overrides.fluid_water = fluids
+            .into_resolved("minecraft:water", &water_tag)
+            .and_then(|m| m.tint)
+            .filter(|tint| {
+                let biome_only = tint.depends_only_on_biome(&overrides.maps);
+                if !biome_only {
+                    log::warn!("fluid_modifiers: the tint of minecraft:water reads the position, which isn't applied yet");
+                }
+                biome_only
+            });
+        overrides
     }
 
     fn from_parts(colors: &PackColors, maps: Colormaps) -> Self {
@@ -58,6 +74,7 @@ impl BiomeOverrides {
             foliage: choose("foliage"),
             dry_foliage: choose("dry_foliage"),
             water: choose("water"),
+            fluid_water: None,
             maps,
         }
     }
@@ -67,6 +84,7 @@ impl BiomeOverrides {
             && self.foliage.is_none()
             && self.dry_foliage.is_none()
             && self.water.is_none()
+            && self.fluid_water.is_none()
     }
 
     fn resolve(&self, choice: &Option<Choice>, temperature: f64, downfall: f64) -> Option<u32> {
@@ -93,6 +111,11 @@ impl BiomeOverrides {
     }
 
     pub fn water(&self, temperature: f64, downfall: f64) -> Option<u32> {
+        if let Some(tint) = &self.fluid_water {
+            if let Some(color) = tint.biome_color(TINT, &self.maps, temperature, downfall) {
+                return Some(color);
+            }
+        }
         self.resolve(&self.water, temperature, downfall)
     }
 }
@@ -136,6 +159,65 @@ mod tests {
                 0, 0x30, 0, 0, 0x40, 0,
             ],
         )
+    }
+
+    #[test]
+    fn a_fluid_modifier_tints_water_and_beats_the_biome_colours_file() {
+        let root = scratch("fluid");
+        write(
+            &root,
+            "assets/foo/polytone/colors.json",
+            r#"{"biome_colors": {"water": 16711680}}"#,
+        );
+        std::fs::create_dir_all(root.join("assets/foo/polytone/fluid_modifiers")).unwrap();
+        write(
+            &root,
+            "assets/foo/polytone/fluid_modifiers/water.json",
+            r##"{"targets": "minecraft:water", "colormap": "#0000FF"}"##,
+        );
+        let overrides = BiomeOverrides::read(&root);
+        assert!(!overrides.is_empty());
+        assert_eq!(overrides.water(0.5, 0.5), Some(0x0000FF));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_fluid_colormap_sampled_by_biome_reads_temperature_and_downfall() {
+        let root = scratch("fluid-map");
+        std::fs::create_dir_all(root.join("assets/foo/polytone/fluid_modifiers")).unwrap();
+        write(
+            &root,
+            "assets/foo/polytone/fluid_modifiers/water.json",
+            r#"{"targets": "minecraft:water", "colormap": {"default_color": 1, "x_axis": "TEMPERATURE"}}"#,
+        );
+        write(
+            &root,
+            "assets/foo/polytone/fluid_modifiers/water.png",
+            two_by_two(),
+        );
+        let overrides = BiomeOverrides::read(&root);
+        assert!(overrides.water(0.0, 0.0).is_some());
+        assert_ne!(overrides.water(0.0, 0.0), overrides.water(1.0, 0.0));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_fluid_tint_that_reads_the_position_is_left_alone() {
+        let root = scratch("fluid-pos");
+        std::fs::create_dir_all(root.join("assets/foo/polytone/fluid_modifiers")).unwrap();
+        write(
+            &root,
+            "assets/foo/polytone/fluid_modifiers/water.json",
+            r#"{"targets": "minecraft:water", "colormap": {"default_color": 1, "x_axis": "POS_X / 256", "y_axis": 0}}"#,
+        );
+        write(
+            &root,
+            "assets/foo/polytone/fluid_modifiers/water.png",
+            two_by_two(),
+        );
+        let overrides = BiomeOverrides::read(&root);
+        assert_eq!(overrides.water(0.5, 0.5), None);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
