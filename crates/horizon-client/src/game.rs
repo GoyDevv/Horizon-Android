@@ -843,7 +843,6 @@ impl Screen {
             Screen::Win => "win",
             Screen::DebugOptions => "debug_options",
             Screen::Mod => "mod",
-            Screen::HudEditor => "hud_editor",
         }
     }
 }
@@ -2785,6 +2784,7 @@ struct Game<'a> {
     text_selection: horizon_client::clipboard::AppendSelection,
     /// The chat touch bar's last tapped button and when, and the finger that owns the bar.
     chat_bar_lit: Option<(usize, Instant)>,
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     chat_bar_finger: Option<u64>,
     /// The world was saved for the application ending (`save_for_exit`).
     saved_for_exit: bool,

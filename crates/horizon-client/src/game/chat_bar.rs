@@ -69,6 +69,7 @@ impl Game<'_> {
     }
 
     /// The button under window pixel `p`.
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     fn chat_bar_at(&self, p: [f32; 2]) -> Option<usize> {
         if !self.chat_bar_shown() {
             return None;
@@ -83,6 +84,7 @@ impl Game<'_> {
 
     /// A finger on the chat bar: a tap is the button, and the finger stays the bar's until it
     /// lifts. True when the touch was the bar's.
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     pub(super) fn chat_bar_touch(&mut self, t: &Touch) -> bool {
         if t.phase == TouchPhase::Started
             && let Some(i) = self.chat_bar_at([t.location.x as f32, t.location.y as f32])
@@ -90,6 +92,7 @@ impl Game<'_> {
             self.chat_bar_lit = Some((i, Instant::now()));
             self.chat_bar_finger = Some(t.id);
             self.audio.play_button_click();
+            #[cfg(target_os = "android")]
             self.android_touch_haptic(10);
             match CHAT_KEYS.get(i) {
                 Some(&key) => self.chat_bar_key(key),
@@ -106,11 +109,13 @@ impl Game<'_> {
         false
     }
 
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     fn chat_bar_key(&mut self, key: KeyCode) {
         self.chat_key_code(key, None);
     }
 
     /// Paste the clipboard into the chat box.
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     pub(super) fn chat_paste(&mut self) {
         let m = Measure(&self.gui.atlas.font);
         let c = Commands {

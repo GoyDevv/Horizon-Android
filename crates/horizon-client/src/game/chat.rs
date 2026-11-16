@@ -1152,14 +1152,14 @@ impl Game<'_> {
     /// `viewport_bottom()` enqueues a fresh bounds read when none is pending,
     /// so calling this every frame while chat is open keeps the value fresh.
     #[cfg(target_os = "android")]
-    fn visible_chat_height(batch: &HudBatch) -> f32 {
+    pub(super) fn visible_chat_height(batch: &HudBatch) -> f32 {
         let Some(bottom) = crate::native_ime::viewport_bottom() else {
             return batch.height;
         };
         clamp_gui_height(batch.height, bottom, batch.scale)
     }
     #[cfg(not(target_os = "android"))]
-    fn visible_chat_height(batch: &HudBatch) -> f32 {
+    pub(super) fn visible_chat_height(batch: &HudBatch) -> f32 {
         batch.height
     }
 
