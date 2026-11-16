@@ -1682,7 +1682,7 @@ impl Launcher {
                         split_total_w,
                         split_h,
                         12.0,
-                        my3_accent_soft(),
+                        my3_surface_high(),
                     );
                     ui.stroke_rounded(
                         split_x,
@@ -1690,7 +1690,7 @@ impl Launcher {
                         split_total_w,
                         split_h,
                         12.0,
-                        1.5,
+                        1.25,
                         my3_accent(),
                     );
                     let started = *self
@@ -1829,18 +1829,10 @@ impl Launcher {
                     let tx = content_x + i as f32 * (tile_w + tile_gap);
                     let cr = [tx, chip_y, tile_w, chip_h];
                     self.targets.push((cr, act));
-                    ui.rounded(
-                        tx,
-                        chip_y,
-                        tile_w,
-                        chip_h,
-                        14.0,
-                        if hi {
-                            my3_accent_soft()
-                        } else {
-                            my3_surface_high()
-                        },
-                    );
+                    ui.rounded(tx, chip_y, tile_w, chip_h, 14.0, my3_surface_high());
+                    if hi {
+                        ui.rounded(tx, chip_y, tile_w, chip_h, 14.0, my3_accent_soft());
+                    }
                     ui.stroke_rounded(
                         tx,
                         chip_y,

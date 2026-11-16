@@ -7,8 +7,8 @@
 //! Toggle Sprint, Zoom, Waypoints and ImmersiveThunder. Any other native mod is only code for the game
 //! to be compiled with: it is listed as not built until a native build that contains it is chosen.
 
-use super::*;
 use super::native_hooks::*;
+use super::*;
 use horizon_core::position::BlockPos;
 use horizon_world::chunk::BlockState;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -201,7 +201,12 @@ pub(super) fn parse_dynamic_hnmod(path: &std::path::Path) -> Option<DynamicHnmod
         .unwrap_or("native_mod");
     let clean_stem = raw_stem
         .find('-')
-        .filter(|&i| raw_stem[i + 1..].chars().next().is_some_and(|c| c.is_ascii_digit()))
+        .filter(|&i| {
+            raw_stem[i + 1..]
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_digit())
+        })
         .map(|i| &raw_stem[..i])
         .unwrap_or(raw_stem);
     let mut mod_id = horizon_client::jar_transpiler::sanitize_mod_id(clean_stem);
@@ -293,12 +298,15 @@ pub(super) fn parse_dynamic_hnmod(path: &std::path::Path) -> Option<DynamicHnmod
                         title = t;
                     }
                 }
-                if let Some(ver) = horizon_client::jar_transpiler::extract_toml_field(&s, "version") {
+                if let Some(ver) = horizon_client::jar_transpiler::extract_toml_field(&s, "version")
+                {
                     if !ver.trim().is_empty() {
                         version = ver;
                     }
                 }
-                if let Some(d) = horizon_client::jar_transpiler::extract_toml_field(&s, "description") {
+                if let Some(d) =
+                    horizon_client::jar_transpiler::extract_toml_field(&s, "description")
+                {
                     if description.is_empty() {
                         description = d;
                     }
@@ -504,7 +512,9 @@ fn ensure_dynamic_mods_loaded(game: &Game<'_>, force: bool) {
             };
             for entry in rd.flatten() {
                 let p = entry.path();
-                if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("hnmod") || e.eq_ignore_ascii_case("hmod")) {
+                if p.extension().is_some_and(|e| {
+                    e.eq_ignore_ascii_case("hnmod") || e.eq_ignore_ascii_case("hmod")
+                }) {
                     hnmod_paths.push((root.clone(), p));
                 }
             }
@@ -598,10 +608,7 @@ fn wr_direction(name: &str) -> Option<[i32; 3]> {
         .map(|(_, d)| *d)
 }
 fn wr_direction_name(d: [i32; 3]) -> Option<&'static str> {
-    WR_DIRECTIONS
-        .iter()
-        .find(|(_, v)| *v == d)
-        .map(|(n, _)| *n)
+    WR_DIRECTIONS.iter().find(|(_, v)| *v == d).map(|(n, _)| *n)
 }
 fn wr_axis(name: &str) -> Option<[i32; 3]> {
     WR_AXES.iter().find(|(n, _)| *n == name).map(|(_, d)| *d)
@@ -869,7 +876,9 @@ fn enchantment_description(ench_id: &str) -> Option<&'static str> {
     match short {
         "sharpness" => Some("Increases melee attack damage dealt to all targets."),
         "smite" => Some("Increases melee damage against undead mobs (zombies, skeletons, wither)."),
-        "bane_of_arthropods" => Some("Increases damage against spiders, cave spiders, silverfish, and bees."),
+        "bane_of_arthropods" => {
+            Some("Increases damage against spiders, cave spiders, silverfish, and bees.")
+        }
         "knockback" => Some("Increases knockback distance when hitting mobs."),
         "fire_aspect" => Some("Sets targets on fire when hit with a melee attack."),
         "looting" => Some("Mobs drop more items and have a higher rare drop chance."),
@@ -1122,8 +1131,14 @@ pub(super) fn native_settings(game: &mut Game<'_>, mod_id: &str, buttons: &mut V
         let show_rim = setting_bool(game, mod_id, "show_rim", true);
         let reach = setting_u32(game, mod_id, "reach", 6);
         buttons.push(format!("Target info HUD: {}", on_off(show_hud)));
-        buttons.push(format!("Show block state properties: {}", on_off(show_states)));
-        buttons.push(format!("Highlight targeted block outline: {}", on_off(show_rim)));
+        buttons.push(format!(
+            "Show block state properties: {}",
+            on_off(show_states)
+        ));
+        buttons.push(format!(
+            "Highlight targeted block outline: {}",
+            on_off(show_rim)
+        ));
         buttons.push(format!("Inspection reach: {reach} blocks"));
         return;
     }
@@ -1141,7 +1156,11 @@ pub(super) fn native_settings(game: &mut Game<'_>, mod_id: &str, buttons: &mut V
     if m.features.contains("rightclickharvest") {
         let enabled = setting_bool(game, mod_id, "enabled", true);
         let radius = setting_u32(game, mod_id, "radius", 1);
-        let rad_lbl = if radius >= 3 { "3x3 Area" } else { "Single Crop (1x1)" };
+        let rad_lbl = if radius >= 3 {
+            "3x3 Area"
+        } else {
+            "Single Crop (1x1)"
+        };
         buttons.push(format!("Right-click crop harvest: {}", on_off(enabled)));
         buttons.push(format!("Harvest area: {rad_lbl}"));
         return;
@@ -1214,7 +1233,10 @@ pub(super) fn native_settings(game: &mut Game<'_>, mod_id: &str, buttons: &mut V
             "Sprint mode: {}",
             if sprint_on { "Toggled ON" } else { "Vanilla" }
         ));
-        buttons.push(format!("Show sprint indicator on HUD: {}", on_off(show_hud)));
+        buttons.push(format!(
+            "Show sprint indicator on HUD: {}",
+            on_off(show_hud)
+        ));
         return;
     }
 
@@ -1223,7 +1245,10 @@ pub(super) fn native_settings(game: &mut Game<'_>, mod_id: &str, buttons: &mut V
         let wp = game
             .native_setting(mod_id, "last_waypoint")
             .unwrap_or_else(|| "0,64,0".to_owned());
-        buttons.push(format!("Show waypoint distance on HUD: {}", on_off(show_hud)));
+        buttons.push(format!(
+            "Show waypoint distance on HUD: {}",
+            on_off(show_hud)
+        ));
         buttons.push(format!("Set waypoint to current position ({wp})"));
         return;
     }
@@ -1279,10 +1304,11 @@ pub(super) fn native_settings_click(game: &mut Game<'_>, mod_id: &str, button: u
         smartf3_click::run(&mut *game, mod_id, button);
     }
 
-    let features_and_custom = runtime()
-        .lock()
-        .ok()
-        .and_then(|g| g.mods.get(mod_id).map(|m| (m.features.clone(), m.custom_buttons.clone())));
+    let features_and_custom = runtime().lock().ok().and_then(|g| {
+        g.mods
+            .get(mod_id)
+            .map(|m| (m.features.clone(), m.custom_buttons.clone()))
+    });
     let Some((features, custom_buttons)) = features_and_custom else {
         return;
     };
@@ -1637,7 +1663,8 @@ pub(super) fn native_command(game: &mut Game<'_>, command: &str, ran: &mut bool)
                 .map(|m| m.title.clone())
                 .collect();
             if active.is_empty() {
-                chat_out = Some("§d[Horizon Native Mods]§r No custom .hnmod bundles active.".into());
+                chat_out =
+                    Some("§d[Horizon Native Mods]§r No custom .hnmod bundles active.".into());
             } else {
                 chat_out = Some(format!(
                     "§d[Horizon Native Mods]§r {} active: §a{}",
@@ -1692,8 +1719,7 @@ pub(super) fn native_tick(game: &mut Game<'_>) {
                 let pct = setting_u32(game, &m.id, "gamma_pct", 1000);
                 want_fullbright = Some((pct as f32 / 100.0).clamp(2.0, 16.0));
             }
-            if m.features.contains("toggle_sprint")
-                && setting_bool(game, &m.id, "sprint_on", true)
+            if m.features.contains("toggle_sprint") && setting_bool(game, &m.id, "sprint_on", true)
             {
                 want_toggle_sprint = true;
             }
@@ -1716,7 +1742,8 @@ pub(super) fn native_tick(game: &mut Game<'_>) {
 
         let has_eat_anim = guard.mods.values().any(|m| {
             game.native_on(&m.id)
-                && (m.features.contains("eating_animation") || m.features.contains("eatinganimation"))
+                && (m.features.contains("eating_animation")
+                    || m.features.contains("eatinganimation"))
                 && setting_bool(game, &m.id, "enabled", true)
         });
         if has_eat_anim && game.using.is_some() {
@@ -1757,7 +1784,11 @@ pub(super) fn native_tick(game: &mut Game<'_>) {
                     guard.last_thunder_sound_tick = game_time;
                     guard.thunder_rumble_ticks = if thunder > 0.15 { 36 } else { 18 };
                     let vol = if thunder > 0.15 { 3.5 } else { 1.6 };
-                    let pitch = if (game_time / 180) % 2 == 0 { 0.62 } else { 0.78 };
+                    let pitch = if (game_time / 180) % 2 == 0 {
+                        0.62
+                    } else {
+                        0.78
+                    };
                     play_thunder = Some(([p.x + 12.0, p.y + 18.0, p.z - 10.0], vol, pitch, 4));
                 }
             }
@@ -1838,15 +1869,34 @@ pub(super) fn native_hud(
     use horizon_client::extras::Corner;
 
     let [screen_w, screen_h] = [batch.width, batch.height];
-    let held_stack = game.inventory.get(game.selected).and_then(Option::as_ref).cloned();
+    let held_stack = game
+        .inventory
+        .get(game.selected)
+        .and_then(Option::as_ref)
+        .cloned();
     let held_item = held_stack.as_ref().map(|s| s.item.to_string());
     let (fps, min_fps, low_1_pct) = game.native_frame_rate();
     let (lmb_cps, rmb_cps) = game.native_clicks();
-    let w_key = game.native_mapping("key.forward").map(|(d, _)| d).unwrap_or(false);
-    let a_key = game.native_mapping("key.left").map(|(d, _)| d).unwrap_or(false);
-    let s_key = game.native_mapping("key.back").map(|(d, _)| d).unwrap_or(false);
-    let d_key = game.native_mapping("key.right").map(|(d, _)| d).unwrap_or(false);
-    let jump_key = game.native_mapping("key.jump").map(|(d, _)| d).unwrap_or(false);
+    let w_key = game
+        .native_mapping("key.forward")
+        .map(|(d, _)| d)
+        .unwrap_or(false);
+    let a_key = game
+        .native_mapping("key.left")
+        .map(|(d, _)| d)
+        .unwrap_or(false);
+    let s_key = game
+        .native_mapping("key.back")
+        .map(|(d, _)| d)
+        .unwrap_or(false);
+    let d_key = game
+        .native_mapping("key.right")
+        .map(|(d, _)| d)
+        .unwrap_or(false);
+    let jump_key = game
+        .native_mapping("key.jump")
+        .map(|(d, _)| d)
+        .unwrap_or(false);
 
     let active_mods: Vec<DynamicHnmod> = runtime()
         .lock()
@@ -1865,7 +1915,10 @@ pub(super) fn native_hud(
         .ok()
         .and_then(|g| g.carried_block_name.clone());
     if let Some(cname) = carried_name {
-        let text = format!("Carrying: {} (Right-click to place)", wr_short(&cname).replace('_', " "));
+        let text = format!(
+            "Carrying: {} (Right-click to place)",
+            wr_short(&cname).replace('_', " ")
+        );
         let tw = game.native_text_width(&text) + 12.0;
         let bx = (screen_w - tw) * 0.5;
         let by = screen_h - 58.0;
@@ -1887,16 +1940,16 @@ pub(super) fn native_hud(
                         let pretty = horizon_client::jar_transpiler::title_case_id(raw_id);
                         let mut prop_parts = Vec::new();
                         if setting_bool(game, &m.id, "show_states", true) {
-                            for prop_key in ["facing", "axis", "age", "lit", "power", "level", "half", "open"] {
+                            for prop_key in [
+                                "facing", "axis", "age", "lit", "power", "level", "half", "open",
+                            ] {
                                 if let Some(val) = game.native_block_property(hit.pos, prop_key) {
                                     prop_parts.push(format!("{prop_key}: {val}"));
                                 }
                             }
                         }
-                        let line1 = format!(
-                            "{pretty} ({}, {}, {})",
-                            hit.pos[0], hit.pos[1], hit.pos[2]
-                        );
+                        let line1 =
+                            format!("{pretty} ({}, {}, {})", hit.pos[0], hit.pos[1], hit.pos[2]);
                         let line2 = if prop_parts.is_empty() {
                             horizon_client::jar_transpiler::title_case_id(ns)
                         } else {
@@ -1924,7 +1977,8 @@ pub(super) fn native_hud(
         }
 
         // 2. AppleSkin Saturation & Held Food Restoration HUD
-        if m.features.contains("appleskin_hud") && setting_bool(game, &m.id, "saturation_hud", true) {
+        if m.features.contains("appleskin_hud") && setting_bool(game, &m.id, "saturation_hud", true)
+        {
             if let Some(p) = &game.player {
                 let food = p.health.food.food.max(0);
                 let sat = p.health.food.saturation.max(0.0);
@@ -2175,7 +2229,10 @@ pub(super) fn native_tooltip(
             && setting_bool(game, &m.id, "show_container_items", true)
     });
     let container_items = stack.extra.as_ref().map(|d| d.container.as_slice());
-    if has_shulker && let Some(container) = container_items && !container.is_empty() {
+    if has_shulker
+        && let Some(container) = container_items
+        && !container.is_empty()
+    {
         let mut counts: BTreeMap<String, u32> = BTreeMap::new();
         for (_, st) in container {
             if st.count > 0 && &*st.item != "minecraft:air" {
@@ -2344,8 +2401,20 @@ pub(super) fn native_right_click_block(
                     && short != "end_portal_frame"
                     && !short.contains("portal")
                     && !short.contains("command_block")
-                    && (allow_containers || !matches!(short, "chest" | "trapped_chest" | "barrel" | "furnace" | "hopper"));
-                if movable && wr_turnable(&name, &bs.properties.iter().map(|(k, v)| (k.clone(), v.clone())).collect()) {
+                    && (allow_containers
+                        || !matches!(
+                            short,
+                            "chest" | "trapped_chest" | "barrel" | "furnace" | "hopper"
+                        ));
+                if movable
+                    && wr_turnable(
+                        &name,
+                        &bs.properties
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect(),
+                    )
+                {
                     if let Some(air) = game.pack.assets.registry.default_state("minecraft:air") {
                         let at = BlockPos::new(pos[0], pos[1], pos[2]);
                         let removed = game.with_level(|b, level, ticks| {
@@ -2394,9 +2463,8 @@ fn game_wrench_turn(game: &mut Game<'_>, pos: [i32; 3], face: [i32; 3]) -> bool 
         let Some(shaped) = shaped.filter(|s| *s != state && !game.world.is_air(*s)) else {
             continue;
         };
-        let placed = game.with_level(|b, level, ticks| {
-            b.set_block(level, ticks, at, shaped, flags::UPDATE_ALL)
-        });
+        let placed = game
+            .with_level(|b, level, ticks| b.set_block(level, ticks, at, shaped, flags::UPDATE_ALL));
         if placed {
             let _ = game.process_level_events();
             return true;
@@ -2754,9 +2822,10 @@ pub(super) fn native_visuals(
     };
 
     // 1. Dynamic Lights when holding light-emitting items
-    let has_dyn_lights = guard.mods.values().any(|m| {
-        game.native_on(&m.id) && m.features.contains("dynamic_lights")
-    });
+    let has_dyn_lights = guard
+        .mods
+        .values()
+        .any(|m| game.native_on(&m.id) && m.features.contains("dynamic_lights"));
     if has_dyn_lights {
         if let (Some(p), Some(held)) = (game.native_player(), game.mod_held_item_id()) {
             let short = held.strip_prefix("minecraft:").unwrap_or(&held);

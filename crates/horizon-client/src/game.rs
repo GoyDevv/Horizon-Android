@@ -75,6 +75,8 @@ mod books;
 mod bossbars;
 mod breezes;
 mod brush;
+#[cfg(target_os = "android")]
+mod build_mining;
 mod bundles;
 mod campfire;
 mod campfire_douse;
@@ -197,8 +199,6 @@ mod music;
 mod names;
 mod narrator;
 #[cfg(target_os = "android")]
-mod build_mining;
-#[cfg(target_os = "android")]
 mod native_builds;
 #[cfg(target_os = "android")]
 mod setup {
@@ -278,7 +278,6 @@ mod screens;
 mod sculk;
 mod sculk_fixture;
 mod server_links;
-mod skin_changer;
 mod server_mods;
 mod server_packs;
 mod server_travel;
@@ -287,6 +286,7 @@ mod shelf;
 mod shield;
 mod shoulders;
 mod sign_edit;
+mod skin_changer;
 mod sniffers;
 mod spawner;
 mod spear;
@@ -3731,11 +3731,9 @@ impl Game<'_> {
         }
         let spectator = self.spectator();
         let sel = self.selected.min(self.inventory.len().saturating_sub(1));
-        let Some(thrown) = horizon_client::items::take_held_drop(
-            &mut self.inventory[sel],
-            all,
-            spectator,
-        ) else {
+        let Some(thrown) =
+            horizon_client::items::take_held_drop(&mut self.inventory[sel], all, spectator)
+        else {
             return;
         };
         self.player_drop(thrown);
@@ -7006,7 +7004,8 @@ impl Game<'_> {
             [player.position.x, player.position.y, player.position.z],
         );
         if !riding {
-            let pre_wind_vy = if grounded && keys.jump && !player.flying && player.velocity.y > 0.45 {
+            let pre_wind_vy = if grounded && keys.jump && !player.flying && player.velocity.y > 0.45
+            {
                 Some(player.velocity.y)
             } else {
                 None
@@ -12247,7 +12246,10 @@ impl Game<'_> {
             .zip(slots)
             .map(|(s, n)| (s.as_ref(), n))
             .collect();
-        equipped.push((self.inventory.get(self.selected).and_then(Option::as_ref), "mainhand"));
+        equipped.push((
+            self.inventory.get(self.selected).and_then(Option::as_ref),
+            "mainhand",
+        ));
         equipped.push((self.offhand.as_ref(), "offhand"));
         for (stack, slot) in equipped {
             let Some(info) = stack.and_then(|s| world_items!(self).get(&s.item)) else {
@@ -15612,8 +15614,7 @@ impl Game<'_> {
                 matches!(
                     self.screen,
                     Screen::Options | Screen::Mod | Screen::SkinChanger | Screen::Win
-                )
-                    || !matches!(t.mode, horizon_client::title::Mode::Main)
+                ) || !matches!(t.mode, horizon_client::title::Mode::Main)
             })
             || (self.title.is_none()
                 && self.player.is_some()
@@ -15814,7 +15815,10 @@ impl Game<'_> {
                 std::mem::swap(&mut self.offhand, &mut self.inventory[sel]);
                 self.hand_stack_replaced(self.selected);
                 self.hand_stack_replaced(shield::OFFHAND_SLOT);
-                let (offhand, main) = (self.offhand.clone(), self.inventory.get(self.selected).cloned().flatten());
+                let (offhand, main) = (
+                    self.offhand.clone(),
+                    self.inventory.get(self.selected).cloned().flatten(),
+                );
                 self.player_on_equip("offhand", main.as_ref(), offhand.as_ref());
                 self.player_on_equip("mainhand", offhand.as_ref(), main.as_ref());
                 self.using = None;

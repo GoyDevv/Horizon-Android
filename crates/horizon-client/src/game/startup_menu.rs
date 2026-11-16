@@ -1638,13 +1638,15 @@ impl Loading {
                         description,
                     } => {
                         let cur_style = self.menu.controls.settings.control_style;
-                        if let Ok(meta) = horizon_client::touch::Settings::copy_or_replace_preset_by_name(
-                            std::path::Path::new("."),
-                            cur_style,
-                            &source_id,
-                            &name,
-                            &description,
-                        ) {
+                        if let Ok(meta) =
+                            horizon_client::touch::Settings::copy_or_replace_preset_by_name(
+                                std::path::Path::new("."),
+                                cur_style,
+                                &source_id,
+                                &name,
+                                &description,
+                            )
+                        {
                             self.menu.controls.settings.select_preset(
                                 std::path::Path::new("."),
                                 cur_style,

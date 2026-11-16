@@ -8,8 +8,8 @@
 //! submits), and says when the activity set a build aside.
 use super::Game;
 use horizon_client::{
-    hud::HudBatch,
     horizon_releases::{self as releases, NativeBuild as Build},
+    hud::HudBatch,
     ui_theme::{Face, Ui, color},
 };
 use sha2::{Digest, Sha256};
@@ -231,7 +231,9 @@ pub(super) fn running_build_info() -> Option<String> {
 }
 
 /// The `horizon-native-mods` folder's mods, each a length and its file, for the service.
-fn bundles_body_for(profile_dir: &std::path::Path) -> Result<(Vec<u8>, Vec<PathBuf>, Vec<String>), String> {
+fn bundles_body_for(
+    profile_dir: &std::path::Path,
+) -> Result<(Vec<u8>, Vec<PathBuf>, Vec<String>), String> {
     let mod_list = horizon_client::mod_list::ModList::load(profile_dir);
     let mut paths: Vec<PathBuf> = Vec::new();
     for folder in [
@@ -265,7 +267,10 @@ fn bundles_body_for(profile_dir: &std::path::Path) -> Result<(Vec<u8>, Vec<PathB
         kept_ids.push(id);
     }
     if body.is_empty() {
-        return Err("There is no enabled native mod (.hnmod / .hmod) in horizon-native-mods/ to compile.".into());
+        return Err(
+            "There is no enabled native mod (.hnmod / .hmod) in horizon-native-mods/ to compile."
+                .into(),
+        );
     }
     Ok((body, kept_paths, kept_ids))
 }
@@ -284,7 +289,11 @@ pub fn compile_profile_blocking(
 ) -> Result<(String, Vec<String>), String> {
     let (body, bundle_paths, mod_ids) = bundles_body_for(profile_dir)?;
     progress(
-        &format!("Validated {} native mod(s): {}", mod_ids.len(), mod_ids.join(", ")),
+        &format!(
+            "Validated {} native mod(s): {}",
+            mod_ids.len(),
+            mod_ids.join(", ")
+        ),
         0.10,
     );
 
@@ -374,13 +383,19 @@ pub fn compile_profile_blocking(
         match status["state"].as_str() {
             Some("starting") => progress("Waking the build server up: about a minute...", 0.30),
             Some("queued") => progress(
-                &format!("In queue: {} build(s) ahead", status["ahead"].as_u64().unwrap_or(0)),
+                &format!(
+                    "In queue: {} build(s) ahead",
+                    status["ahead"].as_u64().unwrap_or(0)
+                ),
                 0.35,
             ),
             Some("building") => {
                 let seconds = status["seconds"].as_u64().unwrap_or(0);
                 let pct = (0.40 + (seconds as f32 / 180.0) * 0.40).clamp(0.40, 0.80);
-                progress(&format!("Compiling on server: {}:{:02}", seconds / 60, seconds % 60), pct);
+                progress(
+                    &format!("Compiling on server: {}:{:02}", seconds / 60, seconds % 60),
+                    pct,
+                );
             }
             Some("done") => break status,
             Some("failed") => {
@@ -419,7 +434,10 @@ pub fn compile_profile_blocking(
             let _ = std::fs::remove_dir_all(entry.path());
         }
     }
-    progress("Ready! HorizonActivity will load libhorizon_android.so on next Play.", 1.0);
+    progress(
+        "Ready! HorizonActivity will load libhorizon_android.so on next Play.",
+        1.0,
+    );
     Ok((name, mod_ids))
 }
 

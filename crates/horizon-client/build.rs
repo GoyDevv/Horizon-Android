@@ -2,7 +2,8 @@
 //! resource 1: Explorer and the task bar show it, and the window takes it as its icon.
 //! The optional Segment Heap manifest is embedded in the same resource compilation.
 fn main() {
-    let root = std::path::PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("../..");
+    let root =
+        std::path::PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("../..");
     let stage = root.join(".horizon-mixins-stage.json");
     if stage.is_file() {
         println!("cargo:rerun-if-changed={}", stage.display());

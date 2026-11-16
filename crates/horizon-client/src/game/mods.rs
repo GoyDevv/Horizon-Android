@@ -260,7 +260,10 @@ pub(super) fn content_root(
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
     let disabled = horizon_client::mod_list::ModList::load(&here).disabled;
     let mut native = Vec::new();
-    if let Some(exe_dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_owned())) {
+    if let Some(exe_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_owned()))
+    {
         native.extend(horizon_mods::find(&exe_dir.join("native-content")));
     }
     if let Some(lib_dir) = std::env::var_os("HORIZON_GAME_LIBRARY")
@@ -286,7 +289,9 @@ pub(super) fn content_root(
     for extra_dir in [
         here.join(mod_list::DIR),
         horizon_client::logging::private_home().join(mod_list::DIR),
-        std::env::current_dir().unwrap_or_default().join(mod_list::DIR),
+        std::env::current_dir()
+            .unwrap_or_default()
+            .join(mod_list::DIR),
     ] {
         for found in horizon_mods::find(&extra_dir) {
             if !paths.contains(&found) {
@@ -322,8 +327,7 @@ pub(super) fn content_root(
         let on = if native.contains(path) {
             !disabled.contains(&m.id)
         } else {
-            enabled.contains(&m.id)
-                || (!disabled.contains(&m.id) && cfg!(target_os = "android"))
+            enabled.contains(&m.id) || (!disabled.contains(&m.id) && cfg!(target_os = "android"))
         } || dev.contains(path);
         if !on
             || !m.capabilities.contains(&Capability::Registries)
@@ -563,7 +567,11 @@ fn built_contains(built: &str, id: &str) -> bool {
         .is_some_and(|mods| mods.iter().any(|m| m["id"] == id || m.as_str() == Some(id)))
 }
 
-fn not_built(dir: &std::path::Path, built: &str, rows: &[mod_list::Installed]) -> Vec<mod_list::Installed> {
+fn not_built(
+    dir: &std::path::Path,
+    built: &str,
+    rows: &[mod_list::Installed],
+) -> Vec<mod_list::Installed> {
     let in_build = |id: &str| built_contains(built, id);
     let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
         .map(|d| d.flatten().map(|e| e.path()).collect())
@@ -793,7 +801,9 @@ impl Game<'_> {
                     .any(|m| m.native.is_some()),
         );
         for row in &mut self.settings.mods.installed {
-            if row.problem.as_deref() == Some(mod_list::NOT_BUILT) && built_contains(&built, &row.id) {
+            if row.problem.as_deref() == Some(mod_list::NOT_BUILT)
+                && built_contains(&built, &row.id)
+            {
                 row.problem = None;
             }
         }

@@ -1,6 +1,6 @@
+use super::BlockStateId;
 #[allow(unused_imports)]
 pub(super) use super::*;
-use super::BlockStateId;
 use horizon_client::mod_api::BlockPos;
 use horizon_world::level::Ticks;
 

@@ -94,9 +94,10 @@ impl Game<'_> {
             .join("options.txt")
     }
     pub(super) fn game_dir() -> std::path::PathBuf {
-        Self::options_path()
-            .parent()
-            .map_or_else(|| std::path::PathBuf::from("."), std::path::Path::to_path_buf)
+        Self::options_path().parent().map_or_else(
+            || std::path::PathBuf::from("."),
+            std::path::Path::to_path_buf,
+        )
     }
     pub(super) fn touch_size(&self) -> [u32; 2] {
         self.renderer
@@ -652,8 +653,7 @@ impl Game<'_> {
         #[cfg(not(target_os = "android"))]
         let limit = framerate_limit(self.settings.max_fps as i32, context);
         #[cfg(target_os = "android")]
-        if (!self.settings.vsync || self.settings.max_fps >= 260)
-            && !self.settings.horizon.battery
+        if (!self.settings.vsync || self.settings.max_fps >= 260) && !self.settings.horizon.battery
         {
             return limit;
         }
@@ -669,8 +669,7 @@ impl Game<'_> {
             return;
         }
         #[cfg(target_os = "android")]
-        if (!self.settings.vsync || self.settings.max_fps >= 260)
-            && !self.settings.horizon.battery
+        if (!self.settings.vsync || self.settings.max_fps >= 260) && !self.settings.horizon.battery
         {
             return;
         }
