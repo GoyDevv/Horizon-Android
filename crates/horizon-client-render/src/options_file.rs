@@ -153,9 +153,21 @@ static TABLE: LazyLock<Vec<Def>> = LazyLock::new(|| {
         def("debugGuiScale", O(LazyInt(-1)), V::Int(0)),
         i("maxAnisotropyBit", 1, 3, 2),
         id("textureFiltering", 3, 0),
-        def("maxFps", O(FrameLimit), V::Int(if cfg!(target_os = "android") { 260 } else { 120 })),
+        def(
+            "maxFps",
+            O(FrameLimit),
+            V::Int(if cfg!(target_os = "android") {
+                260
+            } else {
+                120
+            }),
+        ),
         b("improvedTransparency", false),
-        n("inactivityFpsLimit", INACTIVITY, if cfg!(target_os = "android") { 0 } else { 1 }),
+        n(
+            "inactivityFpsLimit",
+            INACTIVITY,
+            if cfg!(target_os = "android") { 0 } else { 1 },
+        ),
         i("mipmapLevels", 0, 4, 4),
         id("narrator", 4, 0),
         id("particles", 3, 0),

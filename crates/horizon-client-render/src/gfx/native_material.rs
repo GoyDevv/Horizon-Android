@@ -253,7 +253,10 @@ fn vertex_shim(material_source: &str, vertex_stage: Option<&CheckedStage>) -> St
 
         // Strip common line-aligned prefix (texture declarations + shared WGSL files)
         let mut common_bytes = 0usize;
-        for (vl, ml) in v_after.split_inclusive('\n').zip(m_after.split_inclusive('\n')) {
+        for (vl, ml) in v_after
+            .split_inclusive('\n')
+            .zip(m_after.split_inclusive('\n'))
+        {
             if vl == ml {
                 common_bytes += vl.len();
             } else {
@@ -263,10 +266,8 @@ fn vertex_shim(material_source: &str, vertex_stage: Option<&CheckedStage>) -> St
         let vertex_own = &v_after[common_bytes..];
 
         // Collect override names already declared in material_source so we never emit duplicate overrides
-        let existing_overrides: std::collections::HashSet<&str> = material_source
-            .lines()
-            .filter_map(override_ident)
-            .collect();
+        let existing_overrides: std::collections::HashSet<&str> =
+            material_source.lines().filter_map(override_ident).collect();
 
         for line in vertex_own.split_inclusive('\n') {
             if let Some(id) = override_ident(line) {
@@ -279,9 +280,11 @@ fn vertex_shim(material_source: &str, vertex_stage: Option<&CheckedStage>) -> St
         if !out.ends_with('\n') {
             out.push('\n');
         }
-        out += "fn horizon_vertex_move(input: VertexInput) -> vec3<f32> { return vertex(input); }\n";
+        out +=
+            "fn horizon_vertex_move(input: VertexInput) -> vec3<f32> { return vertex(input); }\n";
     } else {
-        out += "fn horizon_vertex_move(input: VertexInput) -> vec3<f32> { return input.position; }\n";
+        out +=
+            "fn horizon_vertex_move(input: VertexInput) -> vec3<f32> { return input.position; }\n";
     }
     out
 }
@@ -324,7 +327,12 @@ impl NativeMaterial {
         constants: &[(String, f64)],
         fog: bool,
     ) -> Result<Self, String> {
-        let module = module(stage, vertex_stage, shape.sprite_tags, shape.sprite_materials)?;
+        let module = module(
+            stage,
+            vertex_stage,
+            shape.sprite_tags,
+            shape.sprite_materials,
+        )?;
         let mut constants = present_constants(&module, constants);
         let sprite_names = [
             "horizon_terrain_SPRITE_ARRAYS",
@@ -506,13 +514,8 @@ mod tests {
             .find(|s| s.kind == StageKind::Material)
             .unwrap();
         let m = module(ms, vs, &[], &[]).expect("material + vertex with waving_plants compiles");
-        let constants = present_constants(
-            &m,
-            &[
-                ("waving_plants".into(), 1.0),
-                ("wind_speed".into(), 2.0),
-            ],
-        );
+        let given = [("waving_plants".into(), 1.0), ("wind_speed".into(), 2.0)];
+        let constants = present_constants(&m, &given);
         assert!(constants.contains(&("waving_plants", 1.0)));
         assert!(constants.contains(&("wind_speed", 2.0)));
     }

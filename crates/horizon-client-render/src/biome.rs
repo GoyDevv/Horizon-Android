@@ -160,6 +160,7 @@ struct Colormaps {
     foliage: Vec<u32>,
     dry: Vec<u32>,
     polytone: horizon_polytone::biome_colors::BiomeOverrides,
+    visuals: horizon_polytone::biome_attributes::BiomeAttributes,
 }
 fn color(v: &Value) -> Option<u32> {
     match v {
@@ -198,6 +199,7 @@ impl BiomeInfo {
     fn from_json(name: String, v: &Value, maps: &Colormaps) -> Self {
         let effects = &v["effects"];
         let attributes = &v["attributes"];
+        let visuals = maps.visuals.visuals(&name);
         let temperature = v["temperature"].as_f64().unwrap_or(0.5) as f32;
         let downfall = v["downfall"].as_f64().unwrap_or(0.5) as f32;
         let modifier = match effects["grass_color_modifier"].as_str() {
@@ -257,9 +259,16 @@ impl BiomeInfo {
                 .water(f64::from(temperature), f64::from(downfall))
                 .or_else(|| color(&effects["water_color"]))
                 .unwrap_or(0x3F76E4),
-            sky: color(&attributes["minecraft:visual/sky_color"]),
-            fog: color(&attributes["minecraft:visual/fog_color"]),
-            water_fog: color(&attributes["minecraft:visual/water_fog_color"]).unwrap_or(0x050533),
+            sky: visuals
+                .sky
+                .or_else(|| color(&attributes["minecraft:visual/sky_color"])),
+            fog: visuals
+                .fog
+                .or_else(|| color(&attributes["minecraft:visual/fog_color"])),
+            water_fog: visuals
+                .water_fog
+                .or_else(|| color(&attributes["minecraft:visual/water_fog_color"]))
+                .unwrap_or(0x050533),
             features: v["features"]
                 .as_array()
                 .into_iter()
@@ -292,6 +301,7 @@ impl Biomes {
             foliage: colormap(root, "foliage")?,
             dry: colormap(root, "dry_foliage")?,
             polytone: horizon_polytone::biome_colors::BiomeOverrides::read(root),
+            visuals: horizon_polytone::biome_attributes::BiomeAttributes::read(root),
         };
         let mut list = Vec::new();
         let mut names: Vec<_> = fs::read_dir(root.join("data/minecraft/worldgen/biome"))?
@@ -482,6 +492,7 @@ mod pack_tests {
             foliage: Vec::new(),
             dry: Vec::new(),
             polytone: Default::default(),
+            visuals: Default::default(),
         };
         let list: Vec<BiomeInfo> = names
             .iter()
@@ -553,6 +564,35 @@ mod pack_tests {
     }
 
     #[test]
+    fn a_polytone_biome_modifier_sets_a_biomes_sky_and_fog() {
+        let root = std::env::temp_dir().join(format!(
+            "horizon-polytone-biome-visuals-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("assets/foo/polytone/biome_modifiers")).unwrap();
+        std::fs::write(
+            root.join("assets/foo/polytone/biome_modifiers/p.json"),
+            r##"{"targets": "minecraft:plains", "attributes_modifiers": {"visual/sky_color": "#102030", "visual/fog_color": "#405060"}}"##,
+        )
+        .unwrap();
+        let maps = Colormaps {
+            grass: Vec::new(),
+            foliage: Vec::new(),
+            dry: Vec::new(),
+            polytone: Default::default(),
+            visuals: horizon_polytone::biome_attributes::BiomeAttributes::read(&root),
+        };
+        let plains = BiomeInfo::from_json("minecraft:plains".to_owned(), &json!({}), &maps);
+        assert_eq!(plains.sky, Some(0x102030));
+        assert_eq!(plains.fog, Some(0x405060));
+        assert_eq!(plains.water_fog, 0x050533);
+        let other = BiomeInfo::from_json("minecraft:desert".to_owned(), &json!({}), &maps);
+        assert_eq!(other.sky, None);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn a_polytone_pack_replaces_the_colour_functions_not_a_biomes_own_colours() {
         let root =
             std::env::temp_dir().join(format!("horizon-polytone-biomes-{}", std::process::id()));
@@ -568,6 +608,7 @@ mod pack_tests {
             foliage: Vec::new(),
             dry: Vec::new(),
             polytone: horizon_polytone::biome_colors::BiomeOverrides::read(&root),
+            visuals: Default::default(),
         };
         let plain = BiomeInfo::from_json("minecraft:plains".to_owned(), &json!({}), &maps);
         assert_eq!(plain.grass, 0x112233);

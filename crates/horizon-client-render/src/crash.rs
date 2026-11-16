@@ -194,7 +194,10 @@ fn read(path: &str) -> Option<String> {
 }
 
 fn command_output(program: &str, args: &[&str]) -> Option<String> {
-    let out = std::process::Command::new(program).args(args).output().ok()?;
+    let out = std::process::Command::new(program)
+        .args(args)
+        .output()
+        .ok()?;
     out.status
         .success()
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_owned())
@@ -409,7 +412,10 @@ fn panic_message(info: &std::panic::PanicHookInfo) -> String {
     if let Some(call) = NATIVE_MOD_CALL.with(Cell::get) {
         match call.id {
             Some(id) => msg.push_str(&format!("\nin native mod {id}, hook {}", call.hook)),
-            None => msg.push_str(&format!("\nin native mod #{}, hook {}", call.index, call.hook)),
+            None => msg.push_str(&format!(
+                "\nin native mod #{}, hook {}",
+                call.index, call.hook
+            )),
         }
     }
     msg
@@ -717,7 +723,10 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("horizon-crash-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let saved = r.save(&dir).unwrap();
-        assert_eq!(saved, dir.join("crash-reports/crash-2026-10-14_09.05.07-client.txt"));
+        assert_eq!(
+            saved,
+            dir.join("crash-reports/crash-2026-10-14_09.05.07-client.txt")
+        );
         assert_eq!(std::fs::read_to_string(&saved).unwrap(), text);
         let _ = std::fs::remove_dir_all(&dir);
     }

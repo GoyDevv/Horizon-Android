@@ -603,7 +603,16 @@ impl TouchControls {
                 let rect = [nx * w, ny * h, nw * w, nh * h];
                 let held = Self::button(control).is_some_and(|bt| state.held(bt));
                 let toggled = (self.latched_controls & (1 << (control as u16))) != 0;
-                draw_goy_static_button(b, a, rect, &p, self.settings.control_label(control), held, toggled, opacity);
+                draw_goy_static_button(
+                    b,
+                    a,
+                    rect,
+                    &p,
+                    self.settings.control_label(control),
+                    held,
+                    toggled,
+                    opacity,
+                );
                 continue;
             }
             if control == Control::Move
@@ -1850,7 +1859,6 @@ pub fn draw_goy_static_button(
                 let b0 = scale_pt(pts[i], sm + t);
                 let b1 = scale_pt(pts[(i + 1) % n], sm + t);
                 b.quad([a0, b0, b1, a1], uv, stroke_c);
-
             }
         }
     };

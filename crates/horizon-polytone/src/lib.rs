@@ -9,6 +9,7 @@
 //! [`DimensionModifier`] environment attribute layers, and the scripting expressions
 //! ([`expr::Program`]) their values and other files use.
 mod attributes;
+pub mod biome_attributes;
 pub mod biome_colors;
 pub mod block_modifiers;
 pub mod colormaps;

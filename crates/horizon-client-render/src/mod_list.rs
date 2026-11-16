@@ -126,7 +126,11 @@ impl ModList {
     pub fn parse(text: &str) -> Self {
         let mut enabled = BTreeSet::new();
         let mut disabled = BTreeSet::new();
-        for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+        for line in text
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        {
             if let Some((k, v)) = line.split_once(':') {
                 let k = k.trim();
                 let v = v.trim();

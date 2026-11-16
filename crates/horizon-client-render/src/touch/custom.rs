@@ -157,11 +157,13 @@ impl CustomButton {
     }
     pub fn active_tokens(&self) -> Vec<String> {
         let mut out = Vec::new();
-        for t in [&self.key, &self.second_key, &self.third_key, &self.fourth_key] {
-            if !t.is_empty()
-                && t != "key.keyboard.unknown"
-                && Self::valid_token(t)
-            {
+        for t in [
+            &self.key,
+            &self.second_key,
+            &self.third_key,
+            &self.fourth_key,
+        ] {
+            if !t.is_empty() && t != "key.keyboard.unknown" && Self::valid_token(t) {
                 out.push(t.clone());
             }
         }
@@ -748,7 +750,8 @@ mod tests {
     fn swipe_through_buttons_triggers_each_button_in_sequence_and_zero_opacity_goy_works() {
         let mut t = TouchControls::default();
         t.viewport(1920, 1080);
-        t.settings.set_control_style(layout::ControlStyle::GoyControl);
+        t.settings
+            .set_control_style(layout::ControlStyle::GoyControl);
         t.settings.custom_buttons.clear();
 
         // Create 3 adjacent Swipe: ON buttons at x = 0.30, 0.45, 0.60, y = 0.50

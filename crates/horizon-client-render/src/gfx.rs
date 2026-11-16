@@ -1373,7 +1373,8 @@ pub(crate) fn is_powervr_adapter(name: &str, vendor: u32, driver: &str) -> bool 
         || name.contains("b-series")
         || name.contains("rogue")
         || driver.contains("powervr")
-        || driver.contains("imagination") || driver.starts_with("img ")
+        || driver.contains("imagination")
+        || driver.starts_with("img ")
 }
 #[cfg(target_os = "android")]
 fn is_powervr(info: &wgpu::AdapterInfo) -> bool {

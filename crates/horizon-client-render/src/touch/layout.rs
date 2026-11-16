@@ -1405,9 +1405,9 @@ impl Settings {
             return None;
         }
         let clean = Self::sanitize_profile_name(trimmed);
-        Self::list_presets(game_home, style)
-            .into_iter()
-            .find(|p| !p.is_default && (p.name.trim().eq_ignore_ascii_case(trimmed) || p.id == clean))
+        Self::list_presets(game_home, style).into_iter().find(|p| {
+            !p.is_default && (p.name.trim().eq_ignore_ascii_case(trimmed) || p.id == clean)
+        })
     }
 
     /// Saves the current layout under `name`, replacing the existing preset if one with the same
@@ -1519,8 +1519,8 @@ impl Settings {
         bytes: &[u8],
         file_name: &str,
     ) -> std::result::Result<PresetMeta, String> {
-        let value: serde_json::Value = serde_json::from_slice(bytes)
-            .map_err(|e| format!("Invalid control JSON file: {e}"))?;
+        let value: serde_json::Value =
+            serde_json::from_slice(bytes).map_err(|e| format!("Invalid control JSON file: {e}"))?;
         let mut parsed: Self = serde_json::from_value(value.clone())
             .map_err(|e| format!("Unrecognized control preset format: {e}"))?;
         let style = Self::detect_control_style(&value, &parsed);
@@ -1556,11 +1556,12 @@ impl Settings {
             parsed.preset_description.trim().chars().take(120).collect()
         };
 
-        let target_id = if let Some(existing) = Self::find_preset_by_name(game_home, style, &display_name) {
-            existing.id
-        } else {
-            Self::allocate_unique_preset_id(game_home, style, &display_name)
-        };
+        let target_id =
+            if let Some(existing) = Self::find_preset_by_name(game_home, style, &display_name) {
+                existing.id
+            } else {
+                Self::allocate_unique_preset_id(game_home, style, &display_name)
+            };
 
         parsed.control_style = style;
         parsed.preset_id = target_id.clone();
@@ -2097,11 +2098,7 @@ impl Settings {
     }
     pub fn control_label(&self, c: Control) -> &str {
         let custom = self.control_labels[c as usize].trim();
-        if custom.is_empty() {
-            c.name()
-        } else {
-            custom
-        }
+        if custom.is_empty() { c.name() } else { custom }
     }
     pub fn slot(&self, c: Control) -> usize {
         match c {

@@ -434,8 +434,8 @@ impl Backend for MixerBackend {
         }
         // Cache short streamed sounds (<= 512 KiB on disk, e.g. weather.rain / thunder / portal)
         // on the shared decoder thread so rain never spawns dozens of threads or re-demuxes OGG.
-        let cacheable_stream = !sound.stream
-            || fs::metadata(&file).is_ok_and(|m| m.len() <= 512 * 1024);
+        let cacheable_stream =
+            !sound.stream || fs::metadata(&file).is_ok_and(|m| m.len() <= 512 * 1024);
         if !cacheable_stream {
             let mixer = self.mixer.clone();
             std::thread::spawn(move || {

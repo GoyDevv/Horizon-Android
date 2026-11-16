@@ -247,7 +247,6 @@ fn trim_fragment_outputs(module: &mut naga::Module, targets: &[Option<wgpu::Colo
     }
 }
 
-
 /// Strips storage image and writable storage buffer operations from a vertex shader module when the
 /// device does not support `VERTEX_WRITABLE_STORAGE` (such as Mali-G52 on Android), so passes like
 /// Photon's `shadow`, `shadow_water`, and `shadow_block` still compile and render shadow maps.
@@ -266,7 +265,10 @@ fn strip_vertex_storage(module: &mut naga::Module) {
             naga::AddressSpace::Storage { access }
                 if access.contains(naga::StorageAccess::STORE)
                     || access.contains(naga::StorageAccess::ATOMIC)
-        ) && gv.binding.as_ref().is_some_and(|b| b.group == 0 || b.group == 4);
+        ) && gv
+            .binding
+            .as_ref()
+            .is_some_and(|b| b.group == 0 || b.group == 4);
         if is_storage_img || is_writable_buf {
             forbidden.insert(h);
         }
@@ -297,7 +299,8 @@ fn strip_vertex_storage(module: &mut naga::Module) {
         for (mut stmt, span) in old.span_into_iter() {
             let keep = match &mut stmt {
                 naga::Statement::ImageStore { .. } | naga::Statement::ImageAtomic { .. } => false,
-                naga::Statement::Store { pointer, .. } | naga::Statement::Atomic { pointer, .. } => {
+                naga::Statement::Store { pointer, .. }
+                | naga::Statement::Atomic { pointer, .. } => {
                     !pointer_uses_forbidden(exprs, *pointer, forbidden)
                 }
                 naga::Statement::Block(b) => {
@@ -336,9 +339,8 @@ fn strip_vertex_storage(module: &mut naga::Module) {
         .chain(module.entry_points.iter_mut().map(|ep| &mut ep.function));
     for f in funcs {
         clean_block(&mut f.body, &f.expressions, &forbidden);
-        f.named_expressions.retain(|&eh, _| {
-            !pointer_uses_forbidden(&f.expressions, eh, &forbidden)
-        });
+        f.named_expressions
+            .retain(|&eh, _| !pointer_uses_forbidden(&f.expressions, eh, &forbidden));
     }
 }
 
@@ -944,7 +946,9 @@ fn checked<T>(device: &wgpu::Device, create: impl FnOnce() -> T) -> Result<T, St
         // shader compiler mutex never starves the main render thread's frame submission.
         std::thread::sleep(std::time::Duration::from_millis(2));
     }
-    let _guard = SCOPE_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _guard = SCOPE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
     let internal = device.push_error_scope(wgpu::ErrorFilter::Internal);
     let value = crate::crash::contain(create);
@@ -1280,8 +1284,7 @@ fn bindings(
             let t = &textures[i];
             t.stage != pack_textures::stage(group)
                 || released.0 != t.stage
-                || horizon_shaders::buffer_index(&t.name)
-                    .is_none_or(|b| released.1 & 1 << b == 0)
+                || horizon_shaders::buffer_index(&t.name).is_none_or(|b| released.1 & 1 << b == 0)
         });
         let image = pack
             .images
@@ -1319,7 +1322,17 @@ fn bindings(
                 {
                     src = Source::Color(0);
                 } else if group == Group::Gbuffers
-                    && matches!(s.name.as_str(), "colortex0" | "gcolor" | "colortex1" | "gdepth" | "colortex2" | "gnormal" | "colortex3" | "composite")
+                    && matches!(
+                        s.name.as_str(),
+                        "colortex0"
+                            | "gcolor"
+                            | "colortex1"
+                            | "gdepth"
+                            | "colortex2"
+                            | "gnormal"
+                            | "colortex3"
+                            | "composite"
+                    )
                 {
                     src = Source::Atlas;
                 }
@@ -2487,23 +2500,24 @@ impl PackPost {
         }
         let has_translucent_pass = water.is_some()
             || weather.is_some()
-            || entities
-                .as_ref()
-                .is_some_and(|e| e.passes.iter().zip(e.late).any(|(p, late)| p.is_some() && late));
+            || entities.as_ref().is_some_and(|e| {
+                e.passes
+                    .iter()
+                    .zip(e.late)
+                    .any(|(p, late)| p.is_some() && late)
+            });
         let depth1 = has_translucent_pass
             && passes
                 .iter()
                 .filter(|p| matches!(p.group, Group::Composite | Group::Final))
                 .chain(&water)
-                .chain(
-                    entities.iter().flat_map(|e| {
-                        e.passes
-                            .iter()
-                            .zip(e.late)
-                            .filter(|&(_, late)| late)
-                            .filter_map(|(p, _)| p.as_ref())
-                    }),
-                )
+                .chain(entities.iter().flat_map(|e| {
+                    e.passes
+                        .iter()
+                        .zip(e.late)
+                        .filter(|&(_, late)| late)
+                        .filter_map(|(p, _)| p.as_ref())
+                }))
                 .chain(weather.iter().take(1).flatten())
                 .any(|p| p.samplers.iter().any(|s| s.source == Source::Depth1));
         let every_pass = || {
@@ -4076,8 +4090,16 @@ impl PackPost {
             snapped_camera,
             shadow_settings_hash,
             shadow_scene_revision: frame.shadow_scene_revision,
-            ticks: if cfg!(target_os = "android") { 0 } else { frame.ticks },
-            day_time: if cfg!(target_os = "android") { frame.pack.day_time / 10 } else { frame.pack.day_time },
+            ticks: if cfg!(target_os = "android") {
+                0
+            } else {
+                frame.ticks
+            },
+            day_time: if cfg!(target_os = "android") {
+                frame.pack.day_time / 10
+            } else {
+                frame.pack.day_time
+            },
             shadow_uniforms_hash,
         }
     }

@@ -104,7 +104,9 @@ impl NativePack {
         let material = others
             .iter()
             .find(|s| s.kind == StageKind::Material)
-            .map(|stage| NativeMaterial::new(device, terrain, &frame, stage, vertex_stage, constants, fog))
+            .map(|stage| {
+                NativeMaterial::new(device, terrain, &frame, stage, vertex_stage, constants, fog)
+            })
             .transpose()?;
         let post = (!post.is_empty())
             .then(|| NativePost::new(device, post, &report.manifest, constants, format, &frame))

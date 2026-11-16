@@ -420,8 +420,7 @@ impl FrameUniforms {
         );
         let camera = frame.camera.as_vec3();
         let (previous_exact, previous_view, previous_projection) =
-            self.previous
-                .unwrap_or((frame.camera, view, projection));
+            self.previous.unwrap_or((frame.camera, view, projection));
         let previous_camera = previous_exact.as_vec3();
         self.previous = Some((frame.camera, view, projection));
         // The camera's whole blocks and the rest, exact however far from the origin.
@@ -560,7 +559,10 @@ impl FrameUniforms {
                 "currentPlayerArmor" => Value::f(&[(inputs.status.armor / 50.0).clamp(0.0, 1.0)]),
                 "maxPlayerArmor" => Value::f(&[50.0]),
                 "currentPlayerHealth" => {
-                    let h = if inputs.status.spectator || inputs.status.max_health <= 0.0 || inputs.status.health <= 0.0 {
+                    let h = if inputs.status.spectator
+                        || inputs.status.max_health <= 0.0
+                        || inputs.status.health <= 0.0
+                    {
                         1.0
                     } else {
                         (inputs.status.health / inputs.status.max_health).clamp(0.05, 1.0)
@@ -578,11 +580,17 @@ impl FrameUniforms {
                 "inSwimmingAnimation" => Value::i(&[i32::from(inputs.status.swimming)]),
                 "is_burning" => Value::i(&[i32::from(inputs.status.burning)]),
                 "is_hurt" => Value::i(&[i32::from(inputs.status.hurt)]),
-                "is_invisible" => Value::i(&[i32::from(inputs.status.invisible || inputs.status.spectator)]),
+                "is_invisible" => Value::i(&[i32::from(
+                    inputs.status.invisible || inputs.status.spectator,
+                )]),
                 "is_sneaking" => Value::i(&[i32::from(inputs.status.sneaking)]),
                 "is_sprinting" => Value::i(&[i32::from(inputs.status.sprinting)]),
                 "isElytraFlying" => Value::i(&[i32::from(inputs.status.elytra_flying)]),
-                "ambientLight" => Value::f(&[if inputs.biome_category == 16 { 0.1 } else { 0.0 }]),
+                "ambientLight" => Value::f(&[if inputs.biome_category == 16 {
+                    0.1
+                } else {
+                    0.0
+                }]),
                 "playerMood" | "constantMood" => Value::f(&[0.0]),
                 "centerDepthSmooth" => Value::f(&[0.5]),
                 "alphaTestRef" => Value::f(&[0.1]),
@@ -597,7 +605,11 @@ impl FrameUniforms {
                 "dhProjection" => m4(projection),
                 "dhPreviousProjection" => m4(previous_projection),
                 "dhProjectionInverse" => m4(projection.inverse()),
-                "sunColor" => Value::f(&if day { [1.0, 0.95, 0.85] } else { [0.15, 0.2, 0.35] }),
+                "sunColor" => Value::f(&if day {
+                    [1.0, 0.95, 0.85]
+                } else {
+                    [0.15, 0.2, 0.35]
+                }),
                 "nsunColor" => Value::f(&[1.0, 0.95, 0.85]),
                 "sunIntensity" => Value::f(&[if day { 1.0 } else { 0.0 }]),
                 "moonIntensity" => Value::f(&[if day { 0.0 } else { 1.0 }]),
@@ -610,7 +622,9 @@ impl FrameUniforms {
                 "isNether" => Value::i(&[i32::from(inputs.biome_category == 16)]),
                 "is_on_ground" => Value::i(&[1]),
                 "heightLimit" | "logicalHeightLimit" => Value::i(&[384]),
-                "hasSkylight" => Value::i(&[i32::from(inputs.biome_category != 16 && inputs.biome_category != 8)]),
+                "hasSkylight" => Value::i(&[i32::from(
+                    inputs.biome_category != 16 && inputs.biome_category != 8,
+                )]),
                 "hasCeiling" => Value::i(&[i32::from(inputs.biome_category == 16)]),
                 // renderStage is NONE outside gbuffers draws.
                 _ => Value::i(&[0]),

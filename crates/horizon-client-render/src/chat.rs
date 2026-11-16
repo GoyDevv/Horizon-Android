@@ -1271,7 +1271,9 @@ impl ChatScreen {
                 let name_prefix = &word[1..];
                 for player in c.registries.custom_tab_suggestions() {
                     if name_prefix.is_empty()
-                        || player.to_lowercase().starts_with(&name_prefix.to_lowercase())
+                        || player
+                            .to_lowercase()
+                            .starts_with(&name_prefix.to_lowercase())
                     {
                         builder.suggest(format!("@{player}"));
                     }
