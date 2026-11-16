@@ -92,6 +92,10 @@ enabled = true               # false pauses it and keeps the webhook
 # mute_after = 2             # the hit (within window_minutes) that mutes for mute_minutes; 0: never
 # tempban_after = 3          # the hit that bans for tempban_hours; 0: never
 # words_file = ""            # your own list, in the format of the built-in one; "": the built-in list
+
+# Fights follow 26.3's rules. For 1.8.9's (no attack cooldown or sweep, 1.8 weapon damage; docs/pvp.md):
+# [combat]
+# legacy = true
 "##;
 
 /// Each typed setting: its section, its name, and the vanilla key it writes.
@@ -708,6 +712,19 @@ mod tests {
         assert_eq!(Config::parse(&render(&c)).unwrap(), c);
         assert!(Config::parse("[anticheat]\nenable = true\n").is_err());
         assert!(Config::parse("[anticheat.timer]\nalert = -1\n").is_err());
+    }
+
+    #[test]
+    fn legacy_combat_is_off_unless_its_section_turns_it_on() {
+        assert!(!Config::default().combat.legacy);
+        assert!(!TEMPLATE.lines().any(|l| l.trim() == "[combat]"));
+        let on = Config::parse(&format!("{TEMPLATE}\n[combat]\nlegacy = true\n")).unwrap();
+        assert!(on.combat.legacy);
+        // Kept when the file is written again, and left out while off.
+        assert_eq!(Config::parse(&render(&on)).unwrap(), on);
+        assert!(!render(&Config::default()).contains("[combat]"));
+        assert!(Config::parse("[combat]\nlegacy = 1\n").is_err());
+        assert!(Config::parse("[combat]\nlegcy = true\n").is_err());
     }
 
     #[test]

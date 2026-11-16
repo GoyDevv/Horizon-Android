@@ -341,10 +341,11 @@ impl Settings {
             .parent()
             .map(crate::gamepad::PadSettings::load)
             .unwrap_or_default();
-        let extras = path
+        let extras_text = path
             .parent()
-            .map(crate::extras::Extras::load)
+            .and_then(|dir| fs::read_to_string(dir.join(crate::extras::FILE)).ok())
             .unwrap_or_default();
+        let mut extras = crate::extras::Extras::parse(&extras_text);
         let mods = path
             .parent()
             .map(crate::mod_list::ModList::load)
@@ -352,15 +353,19 @@ impl Settings {
         let keypad = crate::keypad::Settings::load(&path.with_file_name("horizon-keypad.json"));
         let touch = crate::touch::Settings::load_from(&path.with_file_name("horizon-touch.json"));
         let settings = match fs::read(path) {
-            Ok(bytes) => Self {
-                horizon,
-                controller,
-                touch,
-                keypad,
-                extras,
-                mods,
-                ..Self::parse(&String::from_utf8_lossy(&bytes))
-            },
+            Ok(bytes) => {
+                let text = String::from_utf8_lossy(&bytes);
+                extras.read_old_options(&extras_text, &text);
+                Self {
+                    horizon,
+                    controller,
+                    touch,
+                    keypad,
+                    extras,
+                    mods,
+                    ..Self::parse(&text)
+                }
+            }
             Err(_) => Self {
                 horizon,
                 controller,
@@ -854,6 +859,8 @@ pub enum Opt {
     PadKeyboard,
     /// `options.modelPart.*`: one skin layer (index into `options_file::MODEL_PARTS`).
     ModelPart(usize),
+    /// 3D skin layers: the player's outer layer as extruded slabs.
+    SkinLayers3d,
     MainHand,
     AllowServerListing,
     RealmsNotifications,
@@ -888,6 +895,31 @@ mod tests {
             Settings::parse(&s.serialize()).narrator(),
             horizon_narrator::Status::Off
         );
+    }
+    #[test]
+    fn three_d_skin_layers_move_from_options_txt_to_the_extras_file() {
+        // #8091 wrote the switch into options.txt; a player who had it on keeps
+        // it, and the next options.txt is vanilla's again.
+        let dir = std::env::temp_dir().join(format!(
+            "horizon-skin-layers-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("options.txt"), "fov:0.5\nthreeDSkinLayers:true\n").unwrap();
+        let s = Settings::load(&dir.join("options.txt"));
+        assert!(s.extras.three_d_skin_layers);
+        assert_eq!(s.fov, 90.0);
+        assert!(!s.serialize().contains("threeDSkinLayers"));
+        assert!(crate::extras::Extras::parse(&s.extras.serialize()).three_d_skin_layers);
+        // Once horizon-extras.txt has its own line, a stale options.txt one is ignored.
+        fs::write(dir.join(crate::extras::FILE), "threeDSkinLayers:false\n").unwrap();
+        assert!(
+            !Settings::load(&dir.join("options.txt"))
+                .extras
+                .three_d_skin_layers
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
     #[test]
     fn an_option_set_keeps_horizon_files() {

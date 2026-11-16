@@ -1666,10 +1666,12 @@ fn render_visible(
     let overlay = u32::from(red_overlay(m));
     let s = anim::state(m, alpha);
     let (model_key, texture) = body(m);
+    // 3D skin layers: the player's own outer layer, one slab per painted
+    // texel (`mobs::skin_layers`), in place of the flat inflated box.
     let model = m
-        .kind
-        .layer(&model_key)
-        .cloned()
+        .skin_3d
+        .clone()
+        .or_else(|| m.kind.layer(&model_key).cloned())
         .unwrap_or_else(|| m.kind.model.clone());
     let mut poses = Poses::new(&model);
     anim::setup(m, &s, &mut poses, &data.animations);

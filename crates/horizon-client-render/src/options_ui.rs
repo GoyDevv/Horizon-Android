@@ -332,6 +332,7 @@ impl Opt {
                 "options.modelPart.right_pants_leg",
                 "options.modelPart.hat",
             ][i],
+            Opt::SkinLayers3d => "horizon.options.three_d_skin_layers",
             Opt::MainHand => "options.mainHand",
             Opt::AllowServerListing => "options.allowServerListing",
             Opt::RealmsNotifications => "options.realmsNotifications.button",
@@ -906,6 +907,11 @@ impl Opt {
             } else {
                 "options.key.hold"
             }),
+            Opt::SkinLayers3d => tr(if s.extras.three_d_skin_layers {
+                "options.on"
+            } else {
+                "options.off"
+            }),
             Opt::ToggleAttack => tr(if s.toggle_attack {
                 "options.key.toggle"
             } else {
@@ -1243,6 +1249,7 @@ impl Opt {
             Opt::ChunkBuilder => s.prioritize_chunk_updates = next(s.prioritize_chunk_updates, 3),
             Opt::ToggleCrouch => s.toggle_crouch = !s.toggle_crouch,
             Opt::ToggleSprint => s.toggle_sprint = !s.toggle_sprint,
+            Opt::SkinLayers3d => s.extras.three_d_skin_layers = !s.extras.three_d_skin_layers,
             Opt::ToggleAttack => s.toggle_attack = !s.toggle_attack,
             Opt::ToggleUse => s.toggle_use = !s.toggle_use,
             Opt::AutoJump => s.auto_jump = !s.auto_jump,
@@ -1482,6 +1489,8 @@ pub enum Page {
     Touch,
     PadBinds,
     Extras,
+    /// PvP & HUD (`pvp`): the extras a PvP player sets, on their own page.
+    Pvp,
     /// CreditsAndAttributionScreen.
     Credits,
     /// Horizon Settings: every page Horizon adds, as a mod's settings
@@ -1512,6 +1521,10 @@ enum Act {
     ResetPadKey(&'static str),
     ResetPadKeys,
     ToggleMod(usize),
+    /// PvP & HUD's PvP preset (`pvp::apply_preset`).
+    PvpPreset,
+    /// PvP & HUD's Edit HUD button.
+    HudEditor,
     /// Pick `s.shader_packs[i]`, or turn it off when it is the pick.
     PickShaderPack(usize),
     OpenShaderPackFolder,
@@ -1628,6 +1641,9 @@ fn matches_focus(id: &FocusId, i: usize, wd: &Widget) -> bool {
 pub enum Event {
     /// An accepted button press or the release of a slider.
     ButtonClick,
+    /// Horizon's own: download the Modrinth hit at this index of the pack
+    /// screen's browser. The game owns the packs folder, not this screen.
+    DownloadPack(usize),
     /// Close the options screens (back to the pause menu or title).
     Close,
     /// Settings changed: apply and save them.
@@ -1670,6 +1686,8 @@ pub enum Event {
     NativeButton(usize, usize),
     /// Roll the credits (`CreditsAndAttributionScreen.openCreditsScreen`).
     Credits,
+    /// PvP & HUD's Edit HUD: open the HUD editor over the game.
+    HudEditor,
     /// Copy how an agent connects (the AI Agent page).
     CopyAgentDetails,
     #[cfg(target_os = "android")]
@@ -1725,6 +1743,8 @@ pub struct OptionsUi {
     language_choice: Option<String>,
     language_search: ui::EditBox,
     pub(crate) settings_search: ui::EditBox,
+    /// Horizon's `packBrowser` extra: the pack screen's Add button.
+    pub pack_browser: bool,
     /// Packs: the packs found and the selection the screen opens with.
     pub pack_infos: Vec<crate::pack_screen::PackInfo>,
     pub pack_selection: Vec<String>,
@@ -1792,6 +1812,7 @@ impl Default for OptionsUi {
             language_choice: None,
             language_search: search,
             settings_search,
+            pack_browser: false,
             pack_infos: Vec::new(),
             pack_selection: Vec::new(),
             pack_screen: None,
@@ -1889,6 +1910,7 @@ fn horizon_page_tooltip(page: Page) -> Option<&'static str> {
         Page::GraphicsAdvanced => "horizon.pages.graphics_advanced.tooltip",
         Page::Controller => "horizon.pages.controller.tooltip",
         Page::Extras => "horizon.pages.extras.tooltip",
+        Page::Pvp => "horizon.pages.pvp.tooltip",
         Page::Agent => "horizon.pages.agent.tooltip",
         Page::SplitProfiles => "horizon.pages.split_profiles.tooltip",
         Page::ShaderPacks => "horizon.pages.shader_packs.tooltip",
@@ -2065,6 +2087,8 @@ fn tooltip_text(s: &Settings, wd: &Widget) -> Option<Text> {
         Act::Cycle(opt) => Some(opt.tooltip_key(s)),
         Act::Push(Page::Language) => Some("options.language.tooltip".into()),
         Act::Push(Page::Accessibility) => Some("options.accessibility.tooltip".into()),
+        Act::PvpPreset => Some("horizon.pvp.preset.tooltip".into()),
+        Act::HudEditor => Some("horizon.pvp.editor.tooltip".into()),
         _ => None,
     };
     if let Some(key) = key.filter(|key| lang::has(key)) {
@@ -2436,6 +2460,7 @@ impl OptionsUi {
             Page::Controller => "horizon.pages.controller",
             Page::PadBinds => "horizon.pages.controller_binds",
             Page::Extras => "horizon.pages.extras",
+            Page::Pvp => "horizon.pages.pvp",
             Page::Touch => "Touch Controls",
             Page::Credits => "credits_and_attribution.screen.title",
             Page::Horizon => "horizon.pages.settings",
@@ -2530,7 +2555,7 @@ impl OptionsUi {
 
     fn list_rows(&self, s: &Settings) -> Vec<Row> {
         match self.page() {
-            Page::Extras => {
+            Page::Extras | Page::Pvp => {
                 // Each section's switches two to a row, as vanilla's
                 // OptionsList.addSmall lays out an options screen.
                 let extra = |item: crate::extras::Item| {
@@ -2553,7 +2578,22 @@ impl OptionsUi {
                         widget
                     }
                 };
-                let mut rows = Vec::new();
+                // The PvP preset first; on the Extras page beside the way to the PvP & HUD page.
+                let preset = button(0.0, 0.0, 150.0, tr("horizon.pvp.preset"), Act::PvpPreset);
+                let second = if self.page() == Page::Extras {
+                    button(
+                        0.0,
+                        0.0,
+                        150.0,
+                        tr("horizon.pages.open.pvp"),
+                        Act::Push(Page::Pvp),
+                    )
+                } else {
+                    // The editor moves what the game shows: only from a world.
+                    let edit = button(0.0, 0.0, 150.0, tr("horizon.pvp.editor"), Act::HudEditor);
+                    if self.in_world { edit } else { inactive(edit) }
+                };
+                let mut rows = vec![Row::Buttons(preset, Some(second))];
                 let mut section = Vec::new();
                 let flush = |rows: &mut Vec<Row>, section: &mut Vec<crate::extras::Item>| {
                     rows.extend(
@@ -2563,7 +2603,14 @@ impl OptionsUi {
                     );
                     section.clear();
                 };
-                for row in crate::extras::rows() {
+                let page_rows = match self.page() {
+                    Page::Pvp => crate::pvp::rows()
+                        .into_iter()
+                        .map(|r| r.map(crate::extras::Item::Pvp))
+                        .collect(),
+                    _ => crate::extras::rows(),
+                };
+                for row in page_rows {
                     match row {
                         Err(header) => {
                             flush(&mut rows, &mut section);
@@ -2702,6 +2749,8 @@ impl OptionsUi {
             Page::Skin => {
                 // SkinCustomizationScreen: the seven layers, then Main Hand.
                 let mut opts: Vec<Opt> = (0..MODEL_PART_KEYS.len()).map(Opt::ModelPart).collect();
+                // Horizon's own: the outer layer as real pixels, not one box.
+                opts.push(Opt::SkinLayers3d);
                 opts.push(Opt::MainHand);
                 #[allow(unused_mut)]
                 let mut rows = pairs(&opts);
@@ -4135,6 +4184,9 @@ impl OptionsUi {
                     None => Event::OpenPackFolder,
                 }),
                 crate::pack_screen::Action::Done => events.extend(self.back(s)),
+                crate::pack_screen::Action::BrowsePick(i) => {
+                    events.push(Event::DownloadPack(i));
+                }
                 crate::pack_screen::Action::None => {}
             }
             return events;
@@ -4351,6 +4403,11 @@ impl OptionsUi {
                         }
                         Act::NativeButton(i, b) => events.push(Event::NativeButton(i, b)),
                         Act::OpenModFolder => events.push(Event::OpenModFolder),
+                        Act::PvpPreset => {
+                            crate::pvp::apply_preset(s);
+                            events.push(Event::Changed);
+                        }
+                        Act::HudEditor => events.push(Event::HudEditor),
                         Act::PickShaderPack(i) => {
                             if let Some(pack) = s.shader_packs.get(i) {
                                 s.horizon.shader_pack = if s.horizon.shader_pack == pack.file {
@@ -4723,6 +4780,7 @@ impl OptionsUi {
                     self.pack_infos.clone(),
                     &self.pack_selection,
                 );
+                screen.browsing_allowed = self.pack_browser;
                 screen.changed = std::mem::take(&mut self.pack_reselected);
                 self.pack_screen = Some(screen);
             }
@@ -5295,6 +5353,11 @@ impl OptionsUi {
                         }
                         Act::NativeButton(i, b) => events.push(Event::NativeButton(i, b)),
                         Act::OpenModFolder => events.push(Event::OpenModFolder),
+                        Act::PvpPreset => {
+                            crate::pvp::apply_preset(s);
+                            events.push(Event::Changed);
+                        }
+                        Act::HudEditor => events.push(Event::HudEditor),
                         Act::PickShaderPack(i) => {
                             if let Some(pack) = s.shader_packs.get(i) {
                                 s.horizon.shader_pack = if s.horizon.shader_pack == pack.file {

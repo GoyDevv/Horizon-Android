@@ -5,6 +5,7 @@ pub mod advancements;
 pub mod ambience;
 pub mod android_resources;
 pub mod animate_tick;
+pub mod legacy_combat;
 pub mod arrows;
 pub mod block_contact;
 pub mod breathing;
@@ -16,7 +17,7 @@ pub use horizon_client_render::{
     extras, fast_hash, fog, font, gfx, graphics, graphics_style, graphics_ui, hdr_calibration, hud,
     hud_layout, hud_overlays, inventory_effects, java_text, jigsaw_block, level_loading, light,
     lod, logging, menu_blur, mesher, minimap, mipmap, mod_browser, mod_list, model_library, models,
-    multiline_edit, native_emissive, options_file, options_fixes, options_ui, overlay, pack_screen,
+    multiline_edit, native_emissive, options_file, options_fixes, options_ui, overlay, pack_browser, pack_screen, pvp, pvp_hud,
     packs, par, particles, poi_sections, post_chain, potent_sulfur, preedit, providers,
     screen_draw, screen_effects, sculk, section_mask, settings, shader_options, shader_pack_list,
     signs, skins, sound_engine, sound_events, sound_preview, spans, split_layout, split_profiles,

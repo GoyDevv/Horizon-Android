@@ -426,6 +426,16 @@ impl Game<'_> {
                     let _ = std::fs::create_dir_all(&dir);
                     super::packs::open_folder(&dir);
                 }
+                // Horizon's own Add button: the screen picked a hit, the game
+                // owns the folder it lands in.
+                Event::DownloadPack(i) => {
+                    let dir = super::packs::packs_dir();
+                    if let Some(screen) = &mut self.ui.options.pack_screen
+                        && let Some(browser) = &mut screen.browser
+                    {
+                        browser.download(i, &dir, horizon_core::VANILLA_VERSION);
+                    }
+                }
                 Event::DataPacks(ids) => {
                     let resources = self.vanilla_root();
                     if let Some(title) = &mut self.title {
@@ -463,6 +473,7 @@ impl Game<'_> {
                 Event::NativeSettings(i) => self.native_settings_refresh(i),
                 Event::NativeButton(i, b) => self.native_settings_event(i, b),
                 Event::Credits => self.open_win_screen(false, super::win::Finish::Options),
+                Event::HudEditor => self.open_hud_editor(true),
                 Event::Narrator => self.narrator_status_changed(),
             }
         }
@@ -576,6 +587,13 @@ impl Game<'_> {
             font.japanese = s.japanese_glyphs;
             font.reset_cache();
             self.ui.chat.rescale(&self.gui.atlas);
+        }
+        // 3D skin layers: a skin's slabs are built when it is resolved, so a
+        // change here rebuilds the players already on screen (the Options
+        // screen keeps resolving them every frame; this covers the console
+        // and a setting restored from options.txt at start).
+        if self.title.is_none() {
+            self.update_remote_skins();
         }
     }
     /// `Window.updateFullscreenState`: a fullscreen change made by the window

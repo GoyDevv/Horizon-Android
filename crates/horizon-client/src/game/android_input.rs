@@ -670,6 +670,9 @@ impl Game<'_> {
             }
             return Ok(true);
         }
+        if self.chat_bar_touch(t) {
+            return Ok(true);
+        }
         if t.phase == TouchPhase::Cancelled {
             self.pad.touch_ui.cancel();
             self.android_release_touch_keys(true);

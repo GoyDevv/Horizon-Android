@@ -355,7 +355,11 @@ impl Game<'_> {
             g.combat.player_attacker = None;
             let (strength, xd, zd) = s.knockback;
             if hurt && strength > 0.0 {
-                g.knock_back_player(f64::from(strength), xd, zd);
+                if g.legacy_rules() {
+                    g.legacy_extra_knockback(f64::from(strength), (xd, zd));
+                } else {
+                    g.knock_back_player(f64::from(strength), xd, zd);
+                }
             }
             // The victim's thorns, dealt to the attacker below.
             let thorns = if hurt { g.thorns_damage() } else { Vec::new() };

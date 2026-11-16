@@ -8,6 +8,8 @@ use std::{collections::VecDeque, fs, path::Path};
 pub const FILE: &str = "horizon-extras.txt";
 /// The name the options screen uses while the sort key waits for a key.
 pub const SORT_KEY: &str = "horizon.sort";
+/// The 3D skin layers line, here and in the `options.txt` that held it first.
+const SKIN_LAYERS_KEY: &str = "threeDSkinLayers";
 
 /// The minimap's sizes in GUI pixels, and its zooms in blocks per pixel.
 pub const MINIMAP_SIZES: [(u8, &str); 3] = [(64, "Small"), (96, "Medium"), (128, "Large")];
@@ -44,7 +46,7 @@ impl Corner {
             Corner::BottomRight => "Bottom right",
         }
     }
-    fn parse(s: &str, default: Corner) -> Corner {
+    pub fn parse(s: &str, default: Corner) -> Corner {
         Self::ALL
             .into_iter()
             .find(|c| c.name() == s)
@@ -60,6 +62,10 @@ impl Corner {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Extras {
+    /// The Select Resource Packs screen's Add button, which browses
+    /// Modrinth. Off by default: it is Horizon's own and the screen is
+    /// otherwise vanilla's (tools/test_pack_screen_parity.py).
+    pub pack_browser: bool,
     pub fullbright: bool,
     /// Held, dropped and burning light sources light their surroundings (`dynamic_light`).
     pub dynamic_lights: bool,
@@ -114,10 +120,17 @@ pub struct Extras {
     pub agent_control: bool,
     /// "Playing Horizon" on the player's Discord profile (`discord_presence`; on by default).
     pub discord_presence: bool,
+    /// 3D skin layers (`threeDSkinLayers`, Options → Skin Customization): each
+    /// painted texel of a player's outer layer drawn as a slab
+    /// (`horizon_client::mobs::skin_layers`).
+    pub three_d_skin_layers: bool,
+    /// The PvP & HUD page's options (`pvp`).
+    pub pvp: crate::pvp::Pvp,
 }
 impl Default for Extras {
     fn default() -> Self {
         Self {
+            pack_browser: false,
             fullbright: false,
             dynamic_lights: false,
             zoom: false,
@@ -147,6 +160,8 @@ impl Default for Extras {
             no_ai: false,
             agent_control: false,
             discord_presence: true,
+            three_d_skin_layers: false,
+            pvp: Default::default(),
         }
     }
 }
@@ -172,6 +187,7 @@ impl Extras {
                 _ => d,
             };
             match key.trim() {
+                "packBrowser" => e.pack_browser = flag(e.pack_browser),
                 "fullbright" => e.fullbright = flag(e.fullbright),
                 "dynamicLights" => e.dynamic_lights = flag(e.dynamic_lights),
                 "zoom" => e.zoom = flag(e.zoom),
@@ -222,14 +238,18 @@ impl Extras {
                 horizon_core::no_ai::KEY => e.no_ai = flag(e.no_ai),
                 "agentControl" => e.agent_control = flag(e.agent_control),
                 "discordPresence" => e.discord_presence = flag(e.discord_presence),
-                _ => {}
+                SKIN_LAYERS_KEY => e.three_d_skin_layers = flag(e.three_d_skin_layers),
+                key => {
+                    e.pvp.parse_line(key, value);
+                }
             }
         }
         e
     }
     pub fn serialize(&self) -> String {
-        format!(
-            "fullbright:{}\ndynamicLights:{}\nzoom:{}\nzoomKey:{}\nzoomLevel:{}\nzoomSmooth:{}\nzoomSensitivity:{}\nfps:{}\nfpsCorner:{}\nfpsLows:{}\nkeystrokes:{}\nkeystrokesCorner:{}\nkeystrokesCps:{}\nmovedToMods:{}\nminimap:{}\nminimapCorner:{}\nminimapSize:{}\nminimapShape:{}\nminimapZoom:{}\nminimapRotate:{}\nautoReconnect:{}\nownNameTag:{}\nmouseTweaks:{}\nmouseTweaksWheel:{}\nsort:{}\nsortKey:{}\n{}:{}\nagentControl:{}\ndiscordPresence:{}\n",
+        let mut text = format!(
+            "packBrowser:{}\nfullbright:{}\ndynamicLights:{}\nzoom:{}\nzoomKey:{}\nzoomLevel:{}\nzoomSmooth:{}\nzoomSensitivity:{}\nfps:{}\nfpsCorner:{}\nfpsLows:{}\nkeystrokes:{}\nkeystrokesCorner:{}\nkeystrokesCps:{}\nmovedToMods:{}\nminimap:{}\nminimapCorner:{}\nminimapSize:{}\nminimapShape:{}\nminimapZoom:{}\nminimapRotate:{}\nautoReconnect:{}\nownNameTag:{}\nmouseTweaks:{}\nmouseTweaksWheel:{}\nsort:{}\nsortKey:{}\n{}:{}\nagentControl:{}\ndiscordPresence:{}\n{}:{}\n",
+            bool_text(self.pack_browser),
             bool_text(self.fullbright),
             bool_text(self.dynamic_lights),
             bool_text(self.zoom),
@@ -264,13 +284,36 @@ impl Extras {
             bool_text(self.no_ai),
             bool_text(self.agent_control),
             bool_text(self.discord_presence),
-        )
+            SKIN_LAYERS_KEY,
+            bool_text(self.three_d_skin_layers),
+        );
+        self.pvp.serialize(&mut text);
+        text
+    }
+    /// Adopts the settings `options.txt` held before they moved here, while
+    /// this file (`own`) has no line of its own: 3D skin layers was an
+    /// `options.txt` line. Vanilla's `Options.save` drops lines it doesn't
+    /// know, so it is read there once, the first start after the update.
+    pub fn read_old_options(&mut self, own: &str, options_txt: &str) {
+        fn line(text: &str) -> Option<&str> {
+            text.lines().find_map(|l| {
+                l.split_once(':')
+                    .filter(|(key, _)| *key == SKIN_LAYERS_KEY)
+                    .map(|(_, value)| value)
+            })
+        }
+        if line(own).is_none()
+            && let Some(value) = line(options_txt)
+        {
+            self.three_d_skin_layers = value == "true";
+        }
     }
     /// Binds the extra key `name` (`SORT_KEY`); false for
     /// another name (a vanilla mapping).
     pub fn set_key(&mut self, name: &str, value: String) -> bool {
         match name {
             SORT_KEY => self.sort_key = value,
+            crate::pvp::HUD_EDITOR_KEY => self.pvp.editor_key = value,
             _ => return false,
         }
         true
@@ -394,6 +437,10 @@ pub enum Item {
     AgentControl,
     /// On the Horizon Settings page.
     DiscordPresence,
+    /// The Select Resource Packs screen's Add button (Modrinth).
+    PackBrowser,
+    /// On the PvP & HUD page (`pvp::rows`).
+    Pvp(crate::pvp::Opt),
 }
 /// The Extras page: headers and items.
 pub fn rows() -> Vec<Result<Item, &'static str>> {
@@ -411,6 +458,8 @@ pub fn rows() -> Vec<Result<Item, &'static str>> {
         Ok(SortKey),
         Err("Multiplayer"),
         Ok(AutoReconnect),
+        Err("Menus"),
+        Ok(PackBrowser),
     ]
 }
 impl Item {
@@ -427,16 +476,19 @@ impl Item {
             Item::NoAi => "No AI",
             Item::AgentControl => "Agent Control",
             Item::DiscordPresence => "Discord Rich Presence",
+            Item::PackBrowser => "Resource pack browser",
+            Item::Pvp(o) => o.caption(),
         }
     }
     /// The switch this setting belongs to: it does nothing while that is off.
     pub fn parent(self) -> Option<Item> {
         use Item::*;
         Some(match self {
+            Pvp(o) => return o.parent().map(Pvp),
             MouseTweaksWheel => MouseTweaks,
             SortKey => Sort,
             Fullbright | DynamicLights | OwnNameTag | MouseTweaks | Sort | AutoReconnect | NoAi
-            | AgentControl | DiscordPresence => {
+            | AgentControl | DiscordPresence | PackBrowser => {
                 return None;
             }
         })
@@ -472,6 +524,10 @@ impl Item {
             Item::DiscordPresence => {
                 "Shows Playing Horizon on your Discord profile while Discord runs: menus, single player or multiplayer, the dimension and the time played. Never a world's name or a server's address."
             }
+            Item::PackBrowser => {
+                "Select Resource Packs gets an Add button that searches Modrinth and installs a pack into your packs folder. Off, the game never contacts Modrinth."
+            }
+            Item::Pvp(o) => o.description(),
             Item::AgentControl => {
                 "Your own AI agent can play this game through horizon-ctl or an MCP client, on this computer only."
             }
@@ -483,7 +539,11 @@ impl Item {
         match self {
             Item::Fullbright => Some(Cost::None),
             Item::DynamicLights => Some(Cost::Low),
-            Item::OwnNameTag | Item::AutoReconnect | Item::MouseTweaks | Item::Sort => {
+            Item::OwnNameTag
+            | Item::AutoReconnect
+            | Item::MouseTweaks
+            | Item::Sort
+            | Item::PackBrowser => {
                 Some(Cost::None)
             }
             _ => None,
@@ -502,6 +562,8 @@ impl Item {
             Item::NoAi => e.no_ai,
             Item::AgentControl => e.agent_control,
             Item::DiscordPresence => e.discord_presence,
+            Item::PackBrowser => e.pack_browser,
+            Item::Pvp(o) => return o.switch(&e.pvp),
             _ => return None,
         })
     }
@@ -509,6 +571,7 @@ impl Item {
     pub fn value(self, e: &Extras) -> String {
         match self {
             Item::SortKey => crate::keybinds::display_name(&e.sort_key).plain(),
+            Item::Pvp(o) if o.switch(&e.pvp).is_none() => o.value(&e.pvp).unwrap_or_default(),
             other => match other.switch(e) {
                 Some(true) => "On".into(),
                 _ => "Off".into(),
@@ -529,6 +592,8 @@ impl Item {
             Item::NoAi => e.no_ai = !e.no_ai,
             Item::AgentControl => e.agent_control = !e.agent_control,
             Item::DiscordPresence => e.discord_presence = !e.discord_presence,
+            Item::PackBrowser => e.pack_browser = !e.pack_browser,
+            Item::Pvp(o) => o.cycle(&mut e.pvp, _back),
             Item::SortKey => {}
         }
     }
@@ -536,6 +601,7 @@ impl Item {
     pub fn key_name(self) -> Option<&'static str> {
         match self {
             Item::SortKey => Some(SORT_KEY),
+            Item::Pvp(crate::pvp::Opt::HudEditorKey) => Some(crate::pvp::HUD_EDITOR_KEY),
             _ => None,
         }
     }

@@ -3208,11 +3208,22 @@ impl Game<'_> {
     /// direction (`xd`, `zd`), less its knockback resistance, and up only from
     /// the ground.
     pub(super) fn knock_back_player(&mut self, power: f64, mut xd: f64, mut zd: f64) {
+        let legacy = self.legacy_rules();
         let Some(p) = self.player.as_mut() else {
             return;
         };
         let resistance = p.attribute("minecraft:knockback_resistance").unwrap_or(0.0);
-        let power = power * (1.0 - resistance);
+        // 1.8.9's `EntityLivingBase.knockBack` under Combat feel Legacy rules.
+        if legacy
+            && horizon_client::legacy_combat::resists(resistance, self.world.random.next_double())
+        {
+            return;
+        }
+        let power = if legacy {
+            power
+        } else {
+            power * (1.0 - resistance)
+        };
         if power <= 0.0 {
             return;
         }
@@ -3220,6 +3231,13 @@ impl Game<'_> {
             let r = &mut self.world.random;
             xd = (r.next_double() - r.next_double()) * 0.01;
             zd = (r.next_double() - r.next_double()) * 0.01;
+        }
+        if legacy {
+            let v = p.velocity;
+            let [x, y, z] =
+                horizon_client::legacy_combat::knockback([v.x, v.y, v.z], power, (xd, zd));
+            p.velocity = Vec3::new(x, y, z);
+            return;
         }
         let l = (xd * xd + zd * zd).sqrt();
         let v = p.velocity;
