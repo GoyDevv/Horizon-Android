@@ -147,11 +147,11 @@ impl Launcher {
         }
         horizon_client::android_runtime::graphics_startup::configure(home.clone());
         if horizon_client::android_runtime::graphics_startup::recover(&home) {
-            catalog.config.renderer = crate::catalog::RendererMode::VulkanCompatibility;
+            catalog.config.renderer = crate::catalog::RendererMode::OpenGl;
             if let Err(error) = catalog.config.save(&home) {
                 log::warn!("Could not save graphics recovery choice: {error}");
             }
-            catalog.status = "Previous Vulkan startup was interrupted. Using Vulkan compatibility; you can change Rendering mode in Settings.".into();
+            catalog.status = "Previous graphics startup was interrupted. Using OpenGL ES; you can change Rendering mode in Settings.".into();
         }
         crate::configure_input_mode(catalog.config.input_host);
         crate::device_runtime::configure(catalog.config.device);

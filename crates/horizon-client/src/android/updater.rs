@@ -94,8 +94,9 @@ pub fn check_for_update() -> Result<Option<ReleaseInfo>, String> {
     let name = val["name"].as_str().unwrap_or(&tag).trim().to_owned();
     let changelog = val["body"]
         .as_str()
-        .unwrap_or("New release with improvements and fixes.")
-        .trim()
+        .map(str::trim)
+        .filter(|body| !body.is_empty())
+        .unwrap_or("This release did not include release notes.")
         .to_owned();
 
     let remote_ver = tag.trim_start_matches('v').trim_start_matches('V');
@@ -136,7 +137,7 @@ pub fn check_in_background() {
         return;
     }
     set_status(UpdateStatus::Checking);
-    std::thread::Builder::new()
+    let spawned = std::thread::Builder::new()
         .name("UpdateChecker".into())
         .spawn(|| {
             match check_for_update() {
@@ -154,11 +155,16 @@ pub fn check_in_background() {
                 }
             }
             CHECKING.store(false, Ordering::SeqCst);
-        })
-        .ok();
+        });
+    if let Err(error) = spawned {
+        CHECKING.store(false, Ordering::SeqCst);
+        set_status(UpdateStatus::Error(format!(
+            "Could not start update check: {error}"
+        )));
+    }
 }
 
-/// Downloads the APK and triggers automatic install.
+/// Downloads the APK in the background; installation is an explicit user action.
 pub fn download_and_install_in_background(info: ReleaseInfo, home: PathBuf) {
     if DOWNLOADING.swap(true, Ordering::SeqCst) {
         return;
@@ -175,13 +181,22 @@ pub fn download_and_install_in_background(info: ReleaseInfo, home: PathBuf) {
         total: info.size_bytes,
     });
 
-    std::thread::Builder::new()
+    let failed_partial = Path::new(&info.asset_name).file_name().map(|name| {
+        home.join("updates")
+            .join(format!("{}.partial", name.to_string_lossy()))
+    });
+    let spawned = std::thread::Builder::new()
         .name("UpdateDownloader".into())
         .spawn(move || {
             let res = (|| -> Result<PathBuf, String> {
                 let updates_dir = home.join("updates");
                 std::fs::create_dir_all(&updates_dir).map_err(|e| e.to_string())?;
-                let apk_path = updates_dir.join(&info.asset_name);
+                let asset_name = Path::new(&info.asset_name)
+                    .file_name()
+                    .filter(|name| name.to_string_lossy().to_ascii_lowercase().ends_with(".apk"))
+                    .ok_or("Release has an invalid APK asset name")?;
+                let apk_path = updates_dir.join(asset_name);
+                let partial_path = updates_dir.join(format!("{}.partial", asset_name.to_string_lossy()));
 
                 let resp = ureq::get(&url)
                     .set("User-Agent", &format!("Horizon-Android/{CURRENT_VERSION}"))
@@ -194,8 +209,15 @@ pub fn download_and_install_in_background(info: ReleaseInfo, home: PathBuf) {
                     .and_then(|s| s.parse::<u64>().ok())
                     .unwrap_or(info.size_bytes);
 
+                let max_len = 512 * 1024 * 1024;
+                if info.size_bytes > max_len {
+                    return Err("Update APK exceeds the 512 MiB download limit.".into());
+                }
+                if total_len > max_len {
+                    return Err("Update APK exceeds the 512 MiB download limit.".into());
+                }
                 let mut reader = resp.into_reader();
-                let mut file = std::fs::File::create(&apk_path).map_err(|e| e.to_string())?;
+                let mut file = std::fs::File::create(&partial_path).map_err(|e| e.to_string())?;
                 let mut buffer = [0u8; 65536];
                 let mut downloaded = 0u64;
 
@@ -206,6 +228,9 @@ pub fn download_and_install_in_background(info: ReleaseInfo, home: PathBuf) {
                         .map_err(|e| format!("Download error: {e}"))?;
                     if n == 0 {
                         break;
+                    }
+                    if downloaded.saturating_add(n as u64) > max_len {
+                        return Err("Update APK exceeded the 512 MiB download limit.".into());
                     }
                     file.write_all(&buffer[..n])
                         .map_err(|e| format!("Disk write error: {e}"))?;
@@ -223,6 +248,19 @@ pub fn download_and_install_in_background(info: ReleaseInfo, home: PathBuf) {
                     });
                 }
                 file.sync_all().map_err(|e| e.to_string())?;
+                drop(file);
+                if total_len > 0 && downloaded != total_len {
+                    return Err(format!(
+                        "Update download ended early ({downloaded} of {total_len} bytes)."
+                    ));
+                }
+                if info.size_bytes > 0 && downloaded != info.size_bytes {
+                    return Err(format!(
+                        "Update size did not match release metadata (downloaded {downloaded}, expected {}).",
+                        info.size_bytes
+                    ));
+                }
+                std::fs::rename(&partial_path, &apk_path).map_err(|e| e.to_string())?;
                 Ok(apk_path)
             })();
 
@@ -233,41 +271,59 @@ pub fn download_and_install_in_background(info: ReleaseInfo, home: PathBuf) {
                         path: apk_path.clone(),
                         version: info.version.clone(),
                     });
-                    trigger_install(&apk_path);
                 }
                 Err(err) => {
                     log::warn!("Download error: {err}");
+                    if let Some(path) = failed_partial {
+                        let _ = std::fs::remove_file(path);
+                    }
                     set_status(UpdateStatus::Error(err));
                 }
             }
             DOWNLOADING.store(false, Ordering::SeqCst);
-        })
-        .ok();
+        });
+    if let Err(error) = spawned {
+        DOWNLOADING.store(false, Ordering::SeqCst);
+        set_status(UpdateStatus::Error(format!(
+            "Could not start update download: {error}"
+        )));
+    }
 }
 
 /// Invokes Android package installer through JNI.
-pub fn trigger_install(apk_path: &Path) {
+pub fn trigger_install(apk_path: &Path) -> Result<(), String> {
     #[cfg(target_os = "android")]
     {
-        crate::platform::with_context(|env, activity| {
+        let result = crate::platform::with_context(|env, activity| {
             let path_str = apk_path.to_string_lossy().into_owned();
             let j_path = env.new_string(&path_str)?;
             let cls = env.get_object_class(activity)?;
-            let _ = env.call_static_method(
-                &cls,
-                "installApk",
-                "(Landroid/content/Context;Ljava/lang/String;)V",
-                &[
-                    jni::objects::JValue::Object(activity),
-                    jni::objects::JValue::Object(&j_path.into()),
-                ],
-            );
-            Ok(())
+            let response = env
+                .call_static_method(
+                    &cls,
+                    "installApk",
+                    "(Landroid/content/Context;Ljava/lang/String;)Ljava/lang/String;",
+                    &[
+                        jni::objects::JValue::Object(activity),
+                        jni::objects::JValue::Object(&j_path.into()),
+                    ],
+                )?
+                .l()?;
+            let response: String = env
+                .get_string(&jni::objects::JString::from(response))?
+                .into();
+            Ok(response)
         });
+        match result {
+            Some(message) if message.is_empty() => Ok(()),
+            Some(message) => Err(message),
+            None => Err("Could not contact Android's package installer.".into()),
+        }
     }
     #[cfg(not(target_os = "android"))]
     {
         log::info!("Triggering APK install on path: {}", apk_path.display());
+        Ok(())
     }
 }
 

@@ -102,7 +102,14 @@ pub fn configure_worker_limit(limit: u32) {
     WORKER_LIMIT.store(limit.min(64), Ordering::Relaxed);
 }
 pub fn limit_workers(requested: usize) -> usize {
-    worker_limit(requested, WORKER_LIMIT.load(Ordering::Relaxed))
+    let configured = WORKER_LIMIT.load(Ordering::Relaxed);
+    // 32-bit Android has a tighter address space; keep its automatic chunk
+    // worker pool small while respecting an explicit user setting.
+    #[cfg(all(target_os = "android", target_pointer_width = "32"))]
+    let limit = if configured == 0 { 2 } else { configured };
+    #[cfg(not(all(target_os = "android", target_pointer_width = "32")))]
+    let limit = configured;
+    worker_limit(requested, limit)
 }
 fn worker_limit(requested: usize, limit: u32) -> usize {
     if limit == 0 {
@@ -257,7 +264,11 @@ pub fn sound_cache_budget() -> usize {
     cache_budgets(CACHE_BUDGET_MIB.load(Ordering::Relaxed)).1
 }
 fn cache_budgets(mib: u32) -> (usize, usize) {
-    let bytes = if mib == 0 { 80 } else { mib.min(1024) } as usize * (1 << 20);
+    #[cfg(all(target_os = "android", target_pointer_width = "32"))]
+    let automatic_mib = 48;
+    #[cfg(not(all(target_os = "android", target_pointer_width = "32")))]
+    let automatic_mib = 80;
+    let bytes = if mib == 0 { automatic_mib } else { mib.min(1024) } as usize * (1 << 20);
     (bytes / 5, bytes - bytes / 5)
 }
 #[cfg(test)]

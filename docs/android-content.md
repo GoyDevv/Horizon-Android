@@ -104,4 +104,4 @@ in Installed before Play, or in the game's Shader Packs settings. It changes the
 sky and adds two post-processing passes; it is a functional example, not an
 Android performance benchmark.
 
-The Horizon catalog also lists source-only `.hnmod` mods so their availability is visible. These require rebuilding the game and cannot be installed into the current Android client; the list marks them as unsupported. `.hmod` file and HTTPS imports remain available.
+The Horizon catalog can install source-only `.hnmod` mods, but their source does not execute inside the current game. When an enabled source mod is detected, the game asks before sending its bundle to Horizon's native build service. The resulting game library is loaded on the next start. This requires network access and a build-service-compatible Android ABI; it does not provide a general-purpose in-process Rust plugin runtime. `.hmod` file and HTTPS imports remain available.

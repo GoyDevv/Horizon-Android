@@ -473,21 +473,57 @@ public final class HorizonActivity extends android.app.NativeActivity {
         }
     }
 
-    public static void installApk(android.content.Context context, String apkFilePath) {
+    public static String installApk(android.content.Context context, String apkFilePath) {
         java.io.File file = new java.io.File(apkFilePath);
-        if (!file.exists()) return;
+        if (!file.isFile() || file.length() == 0) return "Downloaded APK is missing or empty.";
         try {
-            java.lang.reflect.Method m = android.os.StrictMode.class.getMethod("disableDeathOnFileUriExposure");
-            m.invoke(null);
-        } catch (Throwable ignored) {}
-        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
-        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-        intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        intent.setDataAndType(android.net.Uri.fromFile(file), "application/vnd.android.package-archive");
-        try {
+            android.content.pm.PackageManager pm = context.getPackageManager();
+            int flags = android.content.pm.PackageManager.GET_SIGNATURES;
+            android.content.pm.PackageInfo installed = pm.getPackageInfo(context.getPackageName(), flags);
+            android.content.pm.PackageInfo update = pm.getPackageArchiveInfo(file.getPath(), flags);
+            if (update == null || !context.getPackageName().equals(update.packageName)) {
+                return "The downloaded APK is invalid or belongs to a different app.";
+            }
+            android.content.pm.Signature[] installedSigners = installed.signatures;
+            android.content.pm.Signature[] updateSigners = update.signatures;
+            if (installedSigners == null || updateSigners == null) {
+                return "Could not verify the APK signing certificate.";
+            }
+            if (installedSigners.length == 0 || updateSigners.length != installedSigners.length) {
+                return "The update APK signing certificate does not match this installation.";
+            }
+            for (int i = 0; i < installedSigners.length; i++) {
+                if (!java.security.MessageDigest.isEqual(
+                        installedSigners[i].toByteArray(), updateSigners[i].toByteArray())) {
+                    return "The update APK signing certificate does not match this installation.";
+                }
+            }
+            if (android.os.Build.VERSION.SDK_INT >= 26
+                    && !context.getPackageManager().canRequestPackageInstalls()) {
+                android.content.Intent settings = new android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        android.net.Uri.parse("package:" + context.getPackageName()));
+                settings.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(settings);
+                return "Allow Horizon to install updates in Android settings, then tap Install again.";
+            }
+            android.net.Uri uri = new android.net.Uri.Builder()
+                    .scheme("content")
+                    .authority(context.getPackageName() + ".updates")
+                    .appendPath("updates")
+                    .appendPath(file.getName())
+                    .build();
+            android.content.Intent intent = new android.content.Intent(
+                    android.content.Intent.ACTION_INSTALL_PACKAGE);
+            intent.setDataAndType(uri, "application/vnd.android.package-archive");
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                    | android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
             context.startActivity(intent);
+            return "";
         } catch (Throwable error) {
             android.util.Log.e("HorizonActivity", "Failed to launch package installer", error);
+            return "Could not open Android's package installer: "
+                    + error.getClass().getSimpleName() + ": " + error.getMessage();
         }
     }
 }

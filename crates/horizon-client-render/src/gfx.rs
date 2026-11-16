@@ -1331,13 +1331,23 @@ impl wgpu::rwh::HasDisplayHandle for WindowDisplay {
 /// `os` is `std::env::consts::OS`; `wgpu_backend`: whether `WGPU_BACKEND` is set,
 /// which picks the backends itself. Auto tries Vulkan, then DirectX 12 on Windows,
 /// then OpenGL (Windows and Linux) for GPUs with neither driver, each when the one
-/// before has no surface, adapter or device. A native crash in the driver can't be
-/// caught in the game; the launcher switches the setting to DirectX 12 after one at
-/// the renderer's start (#746). macOS has Metal only.
+/// before has no surface, adapter or device. A native crash in a driver can't be
+/// caught in the game; Android's startup marker changes Vulkan to OpenGL ES after
+/// an interrupted renderer start. macOS has Metal only.
 fn backend_order(api: GraphicsApi, os: &str, wgpu_backend: bool) -> Vec<wgpu::Backends> {
     use wgpu::Backends;
     if os == "macos" || wgpu_backend {
         return vec![Backends::default()];
+    }
+    // Keep the preferred backend first, but try the other Android graphics API
+    // when adapter, device, or surface creation fails.
+    if os == "android" {
+        return match api {
+            GraphicsApi::OpenGl => vec![Backends::GL, Backends::VULKAN],
+            GraphicsApi::Auto | GraphicsApi::Vulkan | GraphicsApi::Dx12 => {
+                vec![Backends::VULKAN, Backends::GL]
+            }
+        };
     }
     let windows = os == "windows";
     match api {

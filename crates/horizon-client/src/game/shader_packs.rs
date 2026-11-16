@@ -300,6 +300,10 @@ impl Game<'_> {
                 if let Some(renderer) = &mut self.renderer {
                     renderer.set_shader_pack(dimension, None, &[]);
                 }
+                self.system_message(Text::colored(
+                    format!("Shader pack {name} could not be loaded: {e}"),
+                    0xFF5555,
+                ));
             }
             Err(panic) => {
                 self.shader_pack_failed(name, dimension, &panic);
@@ -666,7 +670,7 @@ impl Game<'_> {
             renderer.set_shader_pack(dimension, None, &[]);
         }
         self.system_message(Text::colored(
-            format!("Shader pack {name} could not be loaded and was turned off"),
+            format!("Shader pack {name} failed to load: {error}"),
             0xFF5555,
         ));
     }

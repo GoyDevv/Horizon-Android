@@ -911,9 +911,10 @@ class LauncherOverhaulTests(unittest.TestCase):
         self.assertIn("super::android_bundled::native_visuals(self, rims, lights);", prod_hooks)
         self.assertIn("super::android_bundled::native_hud(self, batch, corners);", prod_hooks)
 
-        # 2. native_builds.rs has "Choose a build..." / "Try again" UI disabled
+        # 2. The native build dialog is shown only while its state machine has an active stage.
         native_builds = _read_repo_file("crates/horizon-client/src/game/native_builds.rs")
-        self.assertIn("pub(super) fn native_builds_shown(&self) -> bool {\n        false\n    }", native_builds)
+        self.assertIn("pub(super) fn native_builds_shown(&self) -> bool {\n        self.native_builds.stage.is_some()\n    }", native_builds)
+        self.assertIn("self.native_builds_press(at);", native_builds)
 
         # 3. Real-time compilation in jar_transpiler.rs, catalog.rs, document_store.rs, documents.rs
         jar_transpiler = _read_repo_file("crates/horizon-client/src/jar_transpiler.rs")
@@ -1105,7 +1106,10 @@ class LauncherOverhaulTests(unittest.TestCase):
 
         bundled_rs = (ROOT / "crates/horizon-client/src/game/android_bundled.rs").read_text(encoding="utf-8")
         self.assertNotIn("game.slot_view(usize::from(game.selected) + 36)", bundled_rs)
-        self.assertIn("game.inventory.get(game.selected).and_then(Option::as_ref).cloned()", bundled_rs)
+        self.assertIn(
+            "game.inventory.get(game.selected).and_then(Option::as_ref).cloned()",
+            "".join(bundled_rs.split()),  # rustfmt may wrap the call chain
+        )
 
         catalog_rs = (ROOT / "crates/horizon-client/src/android/catalog.rs").read_text(encoding="utf-8")
         self.assertIn("Page::Compiler", catalog_rs)
